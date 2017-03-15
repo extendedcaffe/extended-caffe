@@ -474,14 +474,22 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
     const int pixels_per_plane = top[0]->width() * top[0]->height();
     const int pixels_per_image = pixels_per_plane * top[0]->channels();
     // LOG(ERROR) << "BN num: " << top[0]->num() << " channels: " << top[0]->channels();
+#ifdef _OPENMP
 #pragma omp parallel
+    {
+#endif
     for (int n = 0; n < top[0]->num(); ++n) {
+#ifdef _OPENMP
 #pragma omp for
+#endif
       for (int c = 0; c < top[0]->channels(); ++c) {
         const int offset = n * pixels_per_image + c * pixels_per_plane;
         caffe_cpu_scale(pixels_per_plane, coef[c], top_diff + offset, bottom_diff + offset);
       }
     }
+#ifdef _OPENMP
+    }
+#endif
   }
 #endif
 

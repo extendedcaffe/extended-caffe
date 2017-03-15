@@ -106,7 +106,9 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
         diff_.mutable_cpu_data());  // d := w * (b0 - b1)
     }
 
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int index = 0; index < count; index++) {
       Dtype val = diff_.cpu_data()[index];
       Dtype abs_val = abs(val);
@@ -126,7 +128,9 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
 
     // Output per-instance loss
     if (top.size() >= 2) {
+#ifdef _OPENMP
 #pragma omp parallel for collapse(2)
+#endif
         for (int i = 0; i < outer_num_; ++i) {
             for (int j = 0; j < inner_num_; j++) {
                 Dtype sum = 0;
@@ -160,19 +164,22 @@ void SmoothL1LossOHEMLayer<Dtype>::Backward_cpu(
   const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down,
   const vector<Blob<Dtype>*>& bottom) {
     int count = diff_.count();
-	
+#ifdef _OPENMP
 #pragma omp parallel for
-	for(int index = 0; index < count; index++) {
-        Dtype val = diff_.cpu_data()[index];
-        Dtype abs_val = abs(val);
-        if (abs_val < 1) {
-            diff_.mutable_cpu_data()[index] = val;
-		} else {
-			diff_.mutable_cpu_data()[index] = (Dtype(0) < val) - (val < Dtype(0));
-        }
+#endif
+    for (int index = 0; index < count; index++) {
+      Dtype val = diff_.cpu_data()[index];
+      Dtype abs_val = abs(val);
+      if (abs_val < 1) {
+        diff_.mutable_cpu_data()[index] = val;
+      } else {
+        diff_.mutable_cpu_data()[index] = (Dtype(0) < val) - (val < Dtype(0));
+      }
     }
 
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int i = 0; i < 2; ++i) {
       if (propagate_down[i]) {
         const Dtype sign = (i == 0) ? 1 : -1;

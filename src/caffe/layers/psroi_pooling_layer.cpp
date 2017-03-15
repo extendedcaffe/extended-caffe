@@ -100,50 +100,49 @@ namespace caffe {
         Dtype bin_size_w = roi_width / static_cast<Dtype>(pooled_width);
 
         int top_roi_offset = n * output_dim * pooled_height * pooled_width;
-// #pragma omp parallel for
-      for (int ctop = 0; ctop < output_dim; ++ctop) {
-        // per category
-        int top_plane_offset = top_roi_offset + ctop * pooled_height * pooled_width;
-        for (int ph = 0; ph < pooled_height; ++ph) {
-          int top_row_offset = top_plane_offset + ph * pooled_width;
-          for (int pw = 0; pw < pooled_width; ++pw) {
-            int index = top_row_offset + pw;
-            // The output is in order (n, ctop, ph, pw)
-            int hstart = floor(static_cast<Dtype>(ph) * bin_size_h + roi_start_h);
-            int wstart = floor(static_cast<Dtype>(pw) * bin_size_w + roi_start_w);
-            int hend = ceil(static_cast<Dtype>(ph + 1) * bin_size_h + roi_start_h);
-            int wend = ceil(static_cast<Dtype>(pw + 1) * bin_size_w + roi_start_w);
-            // Add roi offsets and clip to input boundaries
-            hstart = min(max(hstart, 0), height);
-            hend = min(max(hend, 0), height);
-            wstart = min(max(wstart, 0), width);
-            wend = min(max(wend, 0), width);
+        for (int ctop = 0; ctop < output_dim; ++ctop) {
+          // per category
+          int top_plane_offset = top_roi_offset + ctop * pooled_height * pooled_width;
+          for (int ph = 0; ph < pooled_height; ++ph) {
+            int top_row_offset = top_plane_offset + ph * pooled_width;
+            for (int pw = 0; pw < pooled_width; ++pw) {
+              int index = top_row_offset + pw;
+              // The output is in order (n, ctop, ph, pw)
+              int hstart = floor(static_cast<Dtype>(ph) * bin_size_h + roi_start_h);
+              int wstart = floor(static_cast<Dtype>(pw) * bin_size_w + roi_start_w);
+              int hend = ceil(static_cast<Dtype>(ph + 1) * bin_size_h + roi_start_h);
+              int wend = ceil(static_cast<Dtype>(pw + 1) * bin_size_w + roi_start_w);
+              // Add roi offsets and clip to input boundaries
+              hstart = min(max(hstart, 0), height);
+              hend = min(max(hend, 0), height);
+              wstart = min(max(wstart, 0), width);
+              wend = min(max(wend, 0), width);
 
-            bool is_empty = (hend <= hstart) || (wend <= wstart);
-            int gw = pw;
-            int gh = ph;
-            int c = (ctop * group_size + gh) * group_size + gw;
+              bool is_empty = (hend <= hstart) || (wend <= wstart);
+              int gw = pw;
+              int gh = ph;
+              int c = (ctop * group_size + gh) * group_size + gw;
 
-            Dtype out_sum = 0;
-            int bottom_base_offset = (roi_batch_ind * channels + c) * pixels;
-            const Dtype *current_bottom = bottom_data + bottom_base_offset;
-            for (int h = hstart; h < hend; ++h) {
-              int roi_row_offset = h * width;
-              for (int w = wstart; w < wend; ++w) {
-                int bottom_index = roi_row_offset + w;
-                out_sum += current_bottom[bottom_index];
+              Dtype out_sum = 0;
+              int bottom_base_offset = (roi_batch_ind * channels + c) * pixels;
+              const Dtype *current_bottom = bottom_data + bottom_base_offset;
+              for (int h = hstart; h < hend; ++h) {
+                int roi_row_offset = h * width;
+                for (int w = wstart; w < wend; ++w) {
+                  int bottom_index = roi_row_offset + w;
+                  out_sum += current_bottom[bottom_index];
+                }
               }
+
+              Dtype bin_area = (hend - hstart) * (wend - wstart);
+              top_data[index] = is_empty ? 0. : out_sum / bin_area;
+
+              mapping_channel[index] = c;
             }
-
-            Dtype bin_area = (hend - hstart) * (wend - wstart);
-            top_data[index] = is_empty ? 0. : out_sum / bin_area;
-
-            mapping_channel[index] = c;
-         }
-       }
-     }
-   }
-}
+          }
+        }
+    }
+  }
 
 
   template <typename Dtype>
