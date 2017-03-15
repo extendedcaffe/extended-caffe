@@ -184,6 +184,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // Setup layer.
     const LayerParameter& layer_param = param.layer(layer_id);
 	// LOG(ERROR) << "layer: " << layer_param.name() << " setup start";
+#if 1
     if (1) /*(param.engine() != "") */{
 	  // XXX: Matrix: force some convolution layers to CAFFE engine here to WR performance issue
 	  if (
@@ -209,6 +210,11 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
          param.mutable_layer(layer_id)->set_engine("MKL2017");
 	  }
 	}
+#else
+    if (param.engine() != "") {
+      param.mutable_layer(layer_id)->set_engine(param.engine());
+	}
+#endif
 
     if (layer_param.propagate_down_size() > 0) {
       CHECK_EQ(layer_param.propagate_down_size(),

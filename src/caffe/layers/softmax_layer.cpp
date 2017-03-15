@@ -85,7 +85,7 @@ void SoftmaxLayer<Dtype>::Forward_cpu_fast_case(
 
     // subtraction
     for (int j = 0; j < channels; ++j)
-        top_data[j] -= scale_data*mult[j];
+        top_data[j] -= scale_data * mult[j];
 
     // exponentiation
     // FIXME_valgrind: caffe_exp<Dtype>(dim, top_data, top_data);
@@ -94,7 +94,7 @@ void SoftmaxLayer<Dtype>::Forward_cpu_fast_case(
     // sum after exp
     scale_data = 0;
     for (int j = 0; j < channels; ++j)
-        scale_data += top_data[j]*mult[j];
+        scale_data += top_data[j] * mult[j];
 
     // division
     for (int j = 0; j < channels; j++) {
