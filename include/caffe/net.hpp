@@ -312,12 +312,12 @@ class Net {
   *        and is to perform in place computation 
   *        if positive then make it doing out-ofplace computation
   */
- static void CompilationRuleThree(const NetParameter& param,
+  static void CompilationRuleThree(const NetParameter& param,
                              NetParameter* param_compiled);
 
 
 
-  static void GetBlobConsumers(std::vector<const LayerParameter*> &consumer_blobs,
+  static void GetBlobConsumers(std::vector<const LayerParameter*> &cnsmer_blobs,
                                                 const string& blob_name_to_find,
                                                 const NetParameter& param,
                                                 int layer_id);
