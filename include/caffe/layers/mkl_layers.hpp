@@ -407,11 +407,16 @@ class MKLBatchNormLayer : public Layer<Dtype> {
         bwd_top_diff(new MKLDiff<Dtype>()),
         bwd_bottom_diff(new MKLDiff<Dtype>()),
         batchNormFwd(static_cast<dnnPrimitive_t>(NULL)),
+        batchNormFwdInference(static_cast<dnnPrimitive_t>(NULL)),
         batchNormBwd(static_cast<dnnPrimitive_t>(NULL)),
+        mean_buffer_(static_cast<Dtype*>(NULL)),
+        variance_buffer_(static_cast<Dtype*>(NULL)),
         scaleShift_buffer_(static_cast<Dtype*>(NULL)),
-        scaleShift_diff_(static_cast<Dtype*>(NULL)),
+        diffScaleShift_buffer_(static_cast<Dtype*>(NULL)),
         layout_usr_(static_cast<dnnLayout_t>(NULL)),
-        blobs_initialized_(false) {}
+        blobs_initialized_(false),
+        use_global_stats_(false)
+      {}
 
   virtual ~MKLBatchNormLayer();
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
@@ -436,7 +441,7 @@ class MKLBatchNormLayer : public Layer<Dtype> {
   void Init(const vector<Blob<Dtype>*>& bottom,
             const vector<Blob<Dtype>*>& top);
 
-//  Dtype moving_average_fraction_;
+  Dtype moving_average_fraction_;
   Dtype eps_;
   bool use_weight_bias_;
   bool bias_term_;
@@ -451,15 +456,14 @@ class MKLBatchNormLayer : public Layer<Dtype> {
   shared_ptr<MKLDiff<Dtype> > bwd_top_diff;
   shared_ptr<MKLDiff<Dtype> > bwd_bottom_diff;
   Blob<Dtype> temp_;
-  dnnPrimitive_t batchNormFwd, batchNormBwd;
+  dnnPrimitive_t batchNormFwd, batchNormFwdInference, batchNormBwd;
+  Dtype *mean_buffer_;
+  Dtype *variance_buffer_;
   Dtype *scaleShift_buffer_;
-  Dtype *scaleShift_diff_;
+  Dtype *diffScaleShift_buffer_;
   dnnLayout_t layout_usr_;
-
   bool use_global_stats_;
   bool blobs_initialized_;
-  dnnBatchNormalizationFlag_t flags_;
-  Blob<Dtype> mean_, variance_, stdvar_;
 };
 
 template <typename Dtype>

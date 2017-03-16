@@ -664,8 +664,8 @@ void Net<Dtype>::CompilationRuleOne(const NetParameter& param,
         // of MKLBatchNorm accordingly
         bool scale_bias_term = consumer_layer_param.
                                scale_param().bias_term();
-        layer_param->mutable_batch_norm_param()->
-        set_bias_term(scale_bias_term);
+        layer_param->mutable_batch_norm_param()->set_use_weight_bias(true);
+        layer_param->mutable_batch_norm_param()->set_bias_term(scale_bias_term);
 
         // merge scale layer params to BN layer
         int base_size = layer_param->param_size();
