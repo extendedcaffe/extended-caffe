@@ -55,6 +55,9 @@ MKLBatchNormLayer<Dtype>::~MKLBatchNormLayer() {
   dnnReleaseBuffer<Dtype>(scaleShift_diff_);
 }
 
+
+#define ENABLE_MKL_BWDBN
+
 template <typename Dtype>
 void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -62,7 +65,6 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
   use_weight_bias_ = this->layer_param_.batch_norm_param().use_weight_bias();
   bias_term_ = this->layer_param_.batch_norm_param().bias_term();
   use_global_stats_ = this->layer_param_.batch_norm_param().use_global_stats();
-
 
   // LOG(ERROR) << "BN layer: " << this->layer_param_.name() << " use_weight_bias: " << use_weight_bias_ << ", use_global_stats: " << use_global_stats_ << ", bias_term_: " << bias_term_;
   size_t dim = 4, sizes[4], strides[4];
@@ -110,8 +112,8 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
   dnnDelete<Dtype>(batchNormFwd);
   dnnDelete<Dtype>(batchNormBwd);
 
-  // blobs_ layout: 0 is scale, 1 is bias,
-  //                2 is mean, 3 is variance, 4 is moving average fraction
+  // blobs_ layout: 0 is mean, 1 is variance, 2 is moving average fraction
+  //                3 is scale, 4 is shift
   // Matrix: don't flush cache if initialized
   if (blobs_initialized_ && this->blobs_.size() != 0 && channels_ == this->blobs_[0]->shape(0)) {
       // LOG(ERROR) << "use blobs_ cache rather than re-initialize";
@@ -132,19 +134,22 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
   vector<int> scaleshift_shape(1);
   scaleshift_shape[0] = channels_;
 
-  this->blobs_[0].reset(new Blob<Dtype>(scaleshift_shape));
-  FillerParameter filler_param(
+  // scale
+  if (this->blobs_.size() > 3) {
+      // scale
+      this->blobs_[3].reset(new Blob<Dtype>(scaleshift_shape));
+      FillerParameter filler_param(
           this->layer_param_.batch_norm_param().filler());
-  if (!this->layer_param_.batch_norm_param().has_filler()) {
-    filler_param.set_type("constant");
-    filler_param.set_value(1);
-  }
-  shared_ptr<Filler<Dtype> > filler(GetFiller<Dtype>(filler_param));
-  filler->Fill(this->blobs_[0].get());
+      if (!this->layer_param_.batch_norm_param().has_filler()) {
+        filler_param.set_type("constant");
+        filler_param.set_value(1);
+      }
+      shared_ptr<Filler<Dtype> > filler(GetFiller<Dtype>(filler_param));
+      filler->Fill(this->blobs_[3].get());
 
-  if (this->blobs_.size() > 1) {
+      // shift
       if (bias_term_) {
-        this->blobs_[1].reset(new Blob<Dtype>(scaleshift_shape));
+        this->blobs_[4].reset(new Blob<Dtype>(scaleshift_shape));
         FillerParameter bias_filler_param(
           this->layer_param_.batch_norm_param().bias_filler());
         if (!this->layer_param_.batch_norm_param().has_bias_filler()) {
@@ -152,31 +157,29 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
           bias_filler_param.set_value(0);
         }
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(bias_filler_param));
-      bias_filler->Fill(this->blobs_[1].get());
-    } else {
-      this->blobs_[1].reset(new Blob<Dtype>(scaleshift_shape));
-      caffe_set(this->blobs_[1]->count(), Dtype(0), this->blobs_[1]->mutable_cpu_data());
-    }
+      bias_filler->Fill(this->blobs_[4].get());
+      } else {
+        this->blobs_[4].reset(new Blob<Dtype>(scaleshift_shape));
+        caffe_set(this->blobs_[4]->count(), Dtype(0), this->blobs_[4]->mutable_cpu_data());
+      }
   }
 
   // Initialize mean, variance and moving average fraction
-  if (this->blobs_.size() > 2) {
-    mean_.Reshape(scaleshift_shape);
-    variance_.Reshape(scaleshift_shape);
-    stdvar_.Reshape(scaleshift_shape);
-    caffe_set(mean_.count(), Dtype(0), mean_.mutable_cpu_data());
-    caffe_set(variance_.count(), Dtype(0), variance_.mutable_cpu_data());
-    caffe_set(stdvar_.count(), Dtype(0), stdvar_.mutable_cpu_data());
-    this->blobs_[2].reset(new Blob<Dtype>(scaleshift_shape));
-    this->blobs_[3].reset(new Blob<Dtype>(scaleshift_shape));
-    for (int i = 2; i < 4; i++) {
-        caffe_set(this->blobs_[i]->count(), Dtype(0), this->blobs_[i]->mutable_cpu_data());
-    }
-
-    scaleshift_shape[0] = 1;
-    this->blobs_[4].reset(new Blob<Dtype>(scaleshift_shape));
-    this->blobs_[4]->mutable_cpu_data()[0] = Dtype(1.0);
+  mean_.Reshape(scaleshift_shape);
+  variance_.Reshape(scaleshift_shape);
+  stdvar_.Reshape(scaleshift_shape);
+  caffe_set(mean_.count(), Dtype(0), mean_.mutable_cpu_data());
+  caffe_set(variance_.count(), Dtype(0), variance_.mutable_cpu_data());
+  caffe_set(stdvar_.count(), Dtype(0), stdvar_.mutable_cpu_data());
+  this->blobs_[0].reset(new Blob<Dtype>(scaleshift_shape));
+  this->blobs_[1].reset(new Blob<Dtype>(scaleshift_shape));
+  for (int i = 0; i < 2; i++) {
+      caffe_set(this->blobs_[i]->count(), Dtype(0), this->blobs_[i]->mutable_cpu_data());
   }
+
+  scaleshift_shape[0] = 1;
+  this->blobs_[2].reset(new Blob<Dtype>(scaleshift_shape));
+  this->blobs_[2]->mutable_cpu_data()[0] = Dtype(1.0);
 
   blobs_initialized_ = true;
 }
@@ -297,33 +300,35 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
 
       if (use_global_stats_) {
         // use the stored mean/variance estimates.
-        const Dtype scale_factor = this->blobs_[4]->cpu_data()[0] == 0 ?
-          0 : 1 / this->blobs_[4]->cpu_data()[0];
+        const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
+          0 : 1 / this->blobs_[2]->cpu_data()[0];
         // LOG(ERROR) << "scale_factor: " << scale_factor << ", mean count: " << mean_.count();
         caffe_cpu_scale(mean_.count(), scale_factor,
-          this->blobs_[2]->cpu_data(), mean_.mutable_cpu_data());
+          this->blobs_[0]->cpu_data(), mean_.mutable_cpu_data());
         caffe_cpu_scale(variance_.count(), scale_factor,
-          this->blobs_[3]->cpu_data(), variance_.mutable_cpu_data());
+          this->blobs_[1]->cpu_data(), variance_.mutable_cpu_data());
         // LOG(ERROR) << "mean: ";
         // for (int i = 0; i < mean_.count(); i++) {
         //    LOG(ERROR) << mean_.cpu_data()[i] << ", ";
         // }
 
+#ifndef ENABLE_MKL_BWDBN
         // back propagation scalar
         caffe_copy(variance_.count(), variance_.cpu_data(), stdvar_.mutable_cpu_data());
         caffe_add_scalar(stdvar_.count(), eps_, stdvar_.mutable_cpu_data());
         caffe_powx(stdvar_.count(), stdvar_.cpu_data(), Dtype(0.5), stdvar_.mutable_cpu_data());
-        caffe_div(stdvar_.count(), this->blobs_[0]->cpu_data(), stdvar_.cpu_data(), stdvar_.mutable_cpu_data());
+        caffe_div(stdvar_.count(), this->blobs_[3]->cpu_data(), stdvar_.cpu_data(), stdvar_.mutable_cpu_data());
+#endif
       }
   }
 
   if (use_weight_bias_) {
     // Fill ScaleShift buffer
     for (int i = 0; i < channels_; i++) {
-      scaleShift_buffer_[i] = this->blobs_[0]->cpu_data()[i];
+      scaleShift_buffer_[i] = this->blobs_[3]->cpu_data()[i];
       scaleShift_buffer_[channels_ + i] = 0;
       if (bias_term_) {
-         scaleShift_buffer_[channels_ + i] = this->blobs_[1]->cpu_data()[i];
+         scaleShift_buffer_[channels_ + i] = this->blobs_[4]->cpu_data()[i];
       }
     }
   }
@@ -402,7 +407,6 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
 
 }
 
-#define ENABLE_MKL_BWDBN
 template <typename Dtype>
 void MKLBatchNormLayer<Dtype>::Backward_cpu(
     const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down,
@@ -456,8 +460,8 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
   if (this->param_propagate_down_[0] || this->param_propagate_down_[1]) {
     // Store ScaleShift blobs
     LOG(ERROR) << "BN layer: " << this->layer_param_.name() << " need weight propagation";
-    Dtype* diff_scale = this->blobs_[0]->mutable_cpu_diff();
-    Dtype* diff_shift = this->blobs_[1]->mutable_cpu_diff();
+    Dtype* diff_scale = this->blobs_[3]->mutable_cpu_diff();
+    Dtype* diff_shift = this->blobs_[4]->mutable_cpu_diff();
     for (int i = 0; i < channels_; i++) {
       diff_scale[i] =  scaleShift_diff_[i];
       diff_shift[i] =  0;
