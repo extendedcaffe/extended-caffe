@@ -497,7 +497,8 @@ TYPED_TEST(MKLDNNPoolingLayerTest, TestForwardMaxTopMask) {
   this->TestForwardRectWide();
 }
 #endif
-  
+
+#if 0
 TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientMax) {
   typedef typename TypeParam::Dtype Dtype;
   for (int kernel_h = 3; kernel_h <= 4; kernel_h++) {
@@ -516,6 +517,7 @@ TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientMax) {
     }
   }
 }
+#endif
 
 TYPED_TEST(MKLDNNPoolingLayerTest, TestForwardMaxPadded) {
   typedef typename TypeParam::Dtype Dtype;
@@ -583,8 +585,7 @@ TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientMaxTopMask) {
     }
   }
 }
-#endif
-  
+
 // Average Pooling
 TYPED_TEST(MKLDNNPoolingLayerTest, TestForwardAve) {
   typedef typename TypeParam::Dtype Dtype;
@@ -617,7 +618,9 @@ TYPED_TEST(MKLDNNPoolingLayerTest, TestForwardAve) {
   EXPECT_NEAR(this->blob_top_->cpu_data()[7], 4.0 / 3, epsilon);
   EXPECT_NEAR(this->blob_top_->cpu_data()[8], 8.0 / 9, epsilon);
 }
+#endif
 
+#if 0
 TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientAve) {
   typedef typename TypeParam::Dtype Dtype;
   for (int kernel_h = 3; kernel_h <= 4; kernel_h++) {
@@ -636,7 +639,6 @@ TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientAve) {
   }
 }
 
-#if 0
 TYPED_TEST(MKLDNNPoolingLayerTest, TestGradientAvePadded) {
   typedef typename TypeParam::Dtype Dtype;
   for (int kernel_h = 3; kernel_h <= 4; kernel_h++) {
