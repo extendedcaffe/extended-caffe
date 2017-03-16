@@ -167,7 +167,7 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestSetupAcrossChannels) {
   EXPECT_EQ(this->blob_top_->height(), IH);
   EXPECT_EQ(this->blob_top_->width(), IW);
 }
-#if 0
+
 TYPED_TEST(MKLDNNLRNLayerTest, TestForwardAcrossChannels) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -182,7 +182,7 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestForwardAcrossChannels) {
                 this->epsilon_);
   }
 }
-#endif
+
 TYPED_TEST(MKLDNNLRNLayerTest, TestForwardAcrossChannelsLargeRegion) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -198,7 +198,6 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestForwardAcrossChannelsLargeRegion) {
                 this->epsilon_);
   }
 }
-#if 0
 TYPED_TEST(MKLDNNLRNLayerTest, TestGradientAcrossChannels) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -219,6 +218,7 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestGradientAcrossChannels) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
 }
+
 TYPED_TEST(MKLDNNLRNLayerTest, TestGradientAcrossChannelsLargeRegion) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -240,6 +240,7 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestGradientAcrossChannelsLargeRegion) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
 }
+
 TYPED_TEST(MKLDNNLRNLayerTest, TestSetupWithinChannel) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -248,10 +249,10 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestSetupWithinChannel) {
   layer_param.mutable_lrn_param()->set_local_size(3);
   MKLDNNLRNLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
-  EXPECT_EQ(this->blob_top_->num(), 2);
-  EXPECT_EQ(this->blob_top_->channels(), 7);
-  EXPECT_EQ(this->blob_top_->height(), 3);
-  EXPECT_EQ(this->blob_top_->width(), 3);
+  EXPECT_EQ(this->blob_top_->num(), MB);
+  EXPECT_EQ(this->blob_top_->channels(), IC);
+  EXPECT_EQ(this->blob_top_->height(), IH);
+  EXPECT_EQ(this->blob_top_->width(), IW);
 }
 
 TYPED_TEST(MKLDNNLRNLayerTest, TestForwardWithinChannel) {
@@ -260,6 +261,11 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestForwardWithinChannel) {
   layer_param.mutable_lrn_param()->set_norm_region(
       LRNParameter_NormRegion_WITHIN_CHANNEL);
   layer_param.mutable_lrn_param()->set_local_size(3);
+
+  // Note: MKLDNN supports only WITHIN channel LRN only in TEST mode
+  // TODO: following line can removed if MKLDNN within channel backward is supported
+  layer_param.set_phase(TEST);
+
   MKLDNNLRNLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
@@ -271,7 +277,8 @@ TYPED_TEST(MKLDNNLRNLayerTest, TestForwardWithinChannel) {
                 this->epsilon_);
   }
 }
-
+// TODO: Enable this test when MKLDNN supports Backward for WINTHIN channel LRN 
+#if 0
 TYPED_TEST(MKLDNNLRNLayerTest, TestGradientWithinChannel) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;

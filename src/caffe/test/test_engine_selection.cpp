@@ -141,6 +141,12 @@ class TestEngineSelection : public MultiDeviceTest<TypeParam> {
         "  bottom: 'norm1' "
         "  top: 'ip1' "
         "} "
+        "layer { "
+        "  name: 'relu2' "
+        "  type: 'ReLU' "
+        "  bottom: 'ip1' "
+        "  top: 'ip1' "
+        "} "
         " layer {"
         "   bottom: 'ip1'"
         "   top: 'bn1'"
@@ -166,8 +172,7 @@ class TestEngineSelection : public MultiDeviceTest<TypeParam> {
         "   top: 'split1' "
         "   name: 'split1' "
         "   type: 'Split' "
-        "}"
-        ;
+        "}";
 
     InitNetFromProtoString(proto);
   }
@@ -193,17 +198,20 @@ TYPED_TEST(TestEngineSelection, TestEngineParser) {
 #endif
 
 #ifdef MKLDNN_SUPPORTED
-  EngineParser ep3("MKLDNN:CPU,FPGA");
+  EngineParser ep3("MKLDNN:CPU,FPGA,DLA");
   EXPECT_FALSE(ep3.isEngine("CAFFE"));
   EXPECT_TRUE(ep3.isEngine("MKLDNN"));
   EXPECT_FALSE(ep3.isEngine("MKL2017"));
   EXPECT_FALSE(ep3.isEngine("CUDNN"));
 
-  EXPECT_EQ(2, ep3.getNumberOfSubEngines());
+  EXPECT_EQ(3, ep3.getNumberOfSubEngines());
 
   EXPECT_EQ(&ep3.getMKLDNNSubEngine(0), &CpuEngine::Instance().get_engine());
 #ifdef FPGA_ENABLED
-   EXPECT_EQ(&ep3.getMKLDNNSubEngine(1), &FPGAEngine::Instance().get_engine());
+  EXPECT_EQ(&ep3.getMKLDNNSubEngine(1), &FPGAEngine::Instance().get_engine());
+#endif
+#ifdef DLA_ENABLED
+  EXPECT_EQ(&ep3.getMKLDNNSubEngine(2), &DLAEngine::Instance().get_engine());
 #endif
   EngineParser ep4("MKLDNN:FPGA,CPU,FPGA");
   EXPECT_FALSE(ep4.isEngine("CAFFE"));
@@ -260,6 +268,12 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetCAFFE) {
           dynamic_cast<ReLULayer<Dtype>* >(relu1_layer);
   EXPECT_NE(null_ptr, relu1_caffe);
 
+  // relu2 verification
+  Layer<Dtype>* relu2_layer = net->layer_by_name("relu2").get();
+  ReLULayer<Dtype>* relu2_caffe =
+          dynamic_cast<ReLULayer<Dtype>* >(relu2_layer);
+  EXPECT_NE(null_ptr, relu2_caffe);
+
   // pool1 verification
   Layer<Dtype>* pool1_layer = net->layer_by_name("pool1").get();
   PoolingLayer<Dtype>* pool1_caffe =
@@ -299,7 +313,7 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetCAFFE) {
   // Do all the automatically inserted splits have correct engine?
   const vector<shared_ptr<Layer<Dtype> > >& layers = net->layers();
   for (int i = 0; i < layers.size(); i++) {
-    if (layers[i]->layer_param().type() == "Split"){
+    if (layers[i]->layer_param().type() == "Split") {
       string name = layers[i]->layer_param().name();
       Layer<Dtype>* split_layer = net->layer_by_name(name).get();
       SplitLayer<Dtype>* split_caffe =
@@ -333,6 +347,12 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetMKL2017) {
   MKLReLULayer<Dtype>* relu1_mkl =
           dynamic_cast<MKLReLULayer<Dtype>* >(relu1_layer);
   EXPECT_NE(null_ptr, relu1_mkl);
+
+  // relu2 verification
+  Layer<Dtype>* relu2_layer = net->layer_by_name("relu2").get();
+  MKLReLULayer<Dtype>* relu2_mkl =
+          dynamic_cast<MKLReLULayer<Dtype>* >(relu2_layer);
+  EXPECT_NE(null_ptr, relu2_mkl);
 
   // pool1 verification
   Layer<Dtype>* pool1_layer = net->layer_by_name("pool1").get();
@@ -373,7 +393,7 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetMKL2017) {
   // Do all the automatically inserted splits have correct engine?
   const vector<shared_ptr<Layer<Dtype> > >& layers = net->layers();
   for (int i = 0; i < layers.size(); i++) {
-    if (layers[i]->layer_param().type() == "Split"){
+    if (layers[i]->layer_param().type() == "Split") {
       string name = layers[i]->layer_param().name();
       Layer<Dtype>* split_layer = net->layer_by_name(name).get();
       MKLSplitLayer<Dtype>* split_mkl =
@@ -407,7 +427,13 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetMKLDNN) {
   Layer<Dtype>* relu1_layer = net->layer_by_name("relu1").get();
   MKLDNNReLULayer<Dtype>* relu1_mkldnn =
           dynamic_cast<MKLDNNReLULayer<Dtype>* >(relu1_layer);
-  EXPECT_NE(null_ptr, relu1_mkldnn);
+  EXPECT_EQ(null_ptr, relu1_mkldnn);
+
+  // relu2 verification
+  Layer<Dtype>* relu2_layer = net->layer_by_name("relu2").get();
+  MKLDNNReLULayer<Dtype>* relu2_mkldnn =
+          dynamic_cast<MKLDNNReLULayer<Dtype>* >(relu2_layer);
+  EXPECT_NE(null_ptr, relu2_mkldnn);
 
   // pool1 verification
   Layer<Dtype>* pool1_layer = net->layer_by_name("pool1").get();
@@ -448,7 +474,7 @@ TYPED_TEST(TestEngineSelection, TestEngineParserNetMKLDNN) {
   // Do all the automatically inserted splits have correct engine?
   const vector<shared_ptr<Layer<Dtype> > >& layers = net->layers();
   for (int i = 0; i < layers.size(); i++) {
-    if (layers[i]->layer_param().type() == "Split"){
+    if (layers[i]->layer_param().type() == "Split") {
       string name = layers[i]->layer_param().name();
       Layer<Dtype>* split_layer = net->layer_by_name(name).get();
       SplitLayer<Dtype>* split_caffe =

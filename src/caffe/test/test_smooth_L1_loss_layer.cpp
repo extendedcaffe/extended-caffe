@@ -35,18 +35,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef MKLDNN_SUPPORTED
-#include <algorithm>
+#include <cmath>
 #include <vector>
 
-#include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
 #include "caffe/filler.hpp"
-
-#include "caffe/layers/mkldnn_layers.hpp"
+#include "caffe/layers/smooth_L1_loss_layer.hpp"
 
 #include "caffe/test/test_caffe_main.hpp"
 #include "caffe/test/test_gradient_check_util.hpp"
@@ -54,66 +51,76 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace caffe {
 
 template <typename TypeParam>
-class MKLDNNNeuronLayerTest : public MultiDeviceTest<TypeParam> {
+class SmoothL1LossLayerTest : public MultiDeviceTest<TypeParam> {
   typedef typename TypeParam::Dtype Dtype;
 
  protected:
-  MKLDNNNeuronLayerTest()
-      : blob_bottom_(new Blob<Dtype>(2, 4, 5, 5)),
-        blob_top_(new Blob<Dtype>()) {
-    Caffe::set_random_seed(1701);
+  SmoothL1LossLayerTest()
+      : blob_bottom_data_(new Blob<Dtype>(10, 5, 1, 1)),
+        blob_bottom_label_(new Blob<Dtype>(10, 5, 1, 1)),
+        blob_top_loss_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
     GaussianFiller<Dtype> filler(filler_param);
-    filler.Fill(this->blob_bottom_);
-    blob_bottom_vec_.push_back(blob_bottom_);
-    blob_top_vec_.push_back(blob_top_);
+    filler.Fill(this->blob_bottom_data_);
+    blob_bottom_vec_.push_back(blob_bottom_data_);
+    filler.Fill(this->blob_bottom_label_);
+    blob_bottom_vec_.push_back(blob_bottom_label_);
+    blob_top_vec_.push_back(blob_top_loss_);
   }
-  virtual ~MKLDNNNeuronLayerTest() { delete blob_bottom_; delete blob_top_; }
-  Blob<Dtype>* const blob_bottom_;
-  Blob<Dtype>* const blob_top_;
+  virtual ~SmoothL1LossLayerTest() {
+    delete blob_bottom_data_;
+    delete blob_bottom_label_;
+    delete blob_top_loss_;
+  }
+
+  void TestForward() {
+    // Get the loss without a specified objective weight -- should be
+    // equivalent to explicitly specifiying a weight of 1.
+    LayerParameter layer_param;
+    SmoothL1LossLayer<Dtype> layer_weight_1(layer_param);
+    layer_weight_1.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+    const Dtype loss_weight_1 =
+        layer_weight_1.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
+
+    // Get the loss again with a different objective weight; check that it is
+    // scaled appropriately.
+    const Dtype kLossWeight = 3.7;
+    layer_param.add_loss_weight(kLossWeight);
+    SmoothL1LossLayer<Dtype> layer_weight_2(layer_param);
+    layer_weight_2.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+    const Dtype loss_weight_2 =
+        layer_weight_2.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
+    const Dtype kErrorMargin = 1e-5;
+    EXPECT_NEAR(loss_weight_1 * kLossWeight, loss_weight_2, kErrorMargin);
+    // Make sure the loss is non-trivial.
+    const Dtype kNonTrivialAbsThresh = 1e-1;
+    EXPECT_GE(fabs(loss_weight_1), kNonTrivialAbsThresh);
+  }
+
+  Blob<Dtype>* const blob_bottom_data_;
+  Blob<Dtype>* const blob_bottom_label_;
+  Blob<Dtype>* const blob_top_loss_;
   vector<Blob<Dtype>*> blob_bottom_vec_;
   vector<Blob<Dtype>*> blob_top_vec_;
 };
 
-typedef ::testing::Types<CPUDevice<float> > TestDtypesCPU;
-TYPED_TEST_CASE(MKLDNNNeuronLayerTest, TestDtypesCPU);
+TYPED_TEST_CASE(SmoothL1LossLayerTest, TestDtypesAndDevices);
 
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLU) {
+TYPED_TEST(SmoothL1LossLayerTest, TestForward) {
+  this->TestForward();
+}
+
+TYPED_TEST(SmoothL1LossLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
-  MKLDNNReLULayer<Dtype> layer(layer_param);
+  const Dtype kLossWeight = 3.7;
+  layer_param.add_loss_weight(kLossWeight);
+  SmoothL1LossLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
-  layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
-  // Now, check values
-  const Dtype* bottom_data = this->blob_bottom_->cpu_data();
-  const Dtype* top_data = this->blob_top_->cpu_data();
-  for (int i = 0; i < this->blob_bottom_->count(); ++i) {
-    EXPECT_GE(top_data[i], 0.);
-    EXPECT_TRUE(top_data[i] == 0 || top_data[i] == bottom_data[i]);
-  }
-}
-
-
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLUGradient) {
-  typedef typename TypeParam::Dtype Dtype;
-  LayerParameter layer_param;
-  MKLDNNReLULayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701, 0., 0.01);
-  checker.CheckGradientEltwise(&layer, this->blob_bottom_vec_,
-      this->blob_top_vec_);
-}
-  
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLUGradientWithNegativeSlope) {
-  typedef typename TypeParam::Dtype Dtype;
-  LayerParameter layer_param;
-  CHECK(google::protobuf::TextFormat::ParseFromString(
-      "relu_param { negative_slope: 0.01 }", &layer_param));
-  MKLDNNReLULayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701, 0., 0.01);
-  checker.CheckGradientEltwise(&layer, this->blob_bottom_vec_,
+  GradientChecker<Dtype> checker(1e-2, 1e-2, 1701);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
 }
 
 }  // namespace caffe
-#endif  // #ifdef MKLDNN_SUPPORTED

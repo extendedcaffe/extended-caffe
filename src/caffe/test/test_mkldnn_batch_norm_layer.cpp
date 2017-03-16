@@ -74,7 +74,7 @@ namespace caffe {
       blob_bottom_vec_.push_back(blob_bottom_);
       blob_top_vec_.push_back(blob_top_);
     }
-    virtual ~MKLDNNBatchNormLayerTest() { delete blob_bottom_; delete blob_top_; }
+    virtual ~MKLDNNBatchNormLayerTest() {delete blob_bottom_; delete blob_top_;}
     Blob<Dtype>* const blob_bottom_;
     Blob<Dtype>* const blob_top_;
     vector<Blob<Dtype>*> blob_bottom_vec_;
@@ -164,7 +164,7 @@ namespace caffe {
       EXPECT_NEAR(1, var, kErrorBound);
     }
   }
-#if 0
+
   TYPED_TEST(MKLDNNBatchNormLayerTest, TestGradient) {
     typedef typename TypeParam::Dtype Dtype;
     LayerParameter layer_param;
@@ -174,7 +174,7 @@ namespace caffe {
     checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
         this->blob_top_vec_);
   }
-#endif
+
 
 }  // namespace caffe
 #endif  // #if defined(MKLDNN_SUPPORTED)
