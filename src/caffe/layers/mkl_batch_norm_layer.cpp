@@ -302,9 +302,15 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
       bwd_top_diff   ->create_internal_layout(batchNormFwd, dnnResourceDst);
       bwd_bottom_diff->create_internal_layout(batchNormFwd, dnnResourceSrc);
 
-       e = dnnBatchNormalizationCreateBackward<Dtype>(
-        &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
-      CHECK_EQ(e, E_SUCCESS);
+       if (!use_global_stats_) {
+         e = dnnBatchNormalizationCreateBackward<Dtype>(
+            &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
+         CHECK_EQ(e, E_SUCCESS);
+       } else {
+         e = dnnBatchNormalizationCreateBackward<Dtype>(
+            &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
+         CHECK_EQ(e, E_SUCCESS); 
+       }
     }
   } else {
     DLOG(INFO) << "Using cpu_data in MKLBatchNormLayer.";
@@ -321,9 +327,15 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
                                     dnnUseScaleShift | dnnUseInputMeanVariance);
       CHECK_EQ(e, E_SUCCESS);
 
-      e = dnnBatchNormalizationCreateBackward<Dtype>(
-        &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
-      CHECK_EQ(e, E_SUCCESS);
+      if (!use_global_stats_) {
+        e = dnnBatchNormalizationCreateBackward<Dtype>(
+          &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
+        CHECK_EQ(e, E_SUCCESS);
+      } else {
+        e = dnnBatchNormalizationCreateBackward<Dtype>(
+          &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
+        CHECK_EQ(e, E_SUCCESS);
+      }
     }
     bottom_data =
       reinterpret_cast<void *>(const_cast<Dtype*>(bottom[0]->cpu_data()));
