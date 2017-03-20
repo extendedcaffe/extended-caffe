@@ -462,7 +462,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   }
   ShareWeights();
   debug_info_ = param.debug_info();
-  time_info_ = 0; // param.time_info();
+  time_info_ = param.time_info();
   
 
   // LOG(ERROR) << "init done with time_info " << time_info_;
