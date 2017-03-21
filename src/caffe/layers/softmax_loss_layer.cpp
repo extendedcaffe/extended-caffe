@@ -176,8 +176,8 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
       ++count_local;
     }
 
-  count +=  count_local;
-  loss -= loss_local;
+    count += count_local;
+    loss -= loss_local;
   }
 
   top[0]->mutable_cpu_data()[0] = loss / get_normalizer(normalization_, count);

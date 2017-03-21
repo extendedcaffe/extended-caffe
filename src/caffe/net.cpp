@@ -204,7 +204,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
           // !layer_param.name().compare("rpn_bbox_pred")
           (layer_param.type().compare("BatchNorm") &&
           layer_param.type().compare("ReLU") &&
+          layer_param.type().compare("Concat") &&
           layer_param.type().compare("Convolution") &&
+          layer_param.type().compare("LRN") &&
           layer_param.type().compare("Eltwise") &&
           layer_param.type().compare("Pooling") &&
           layer_param.type().compare("Split"))
