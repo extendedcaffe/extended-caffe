@@ -62,6 +62,13 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
   count_ = 1;
   shape_.resize(shape.size());
 
+#if 0
+  LOG(ERROR) << "shape size: " << shape.size();
+  for (int i = 0; i < shape.size(); i++) {
+   LOG(ERROR) << shape[i];
+  }
+#endif
+
 #ifndef CPU_ONLY
   if (!shape_data_ || shape_data_->size() < shape.size() * sizeof(int)) {
     shape_data_.reset(new SyncedMemory(shape.size() * sizeof(int)));
@@ -72,7 +79,7 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
   for (int i = 0; i < shape.size(); ++i) {
     CHECK_GE(shape[i], 0);
     if (count_ != 0) {
-      CHECK_LE(shape[i], INT_MAX / count_) << "blob size exceeds INT_MAX";
+      CHECK_LE(shape[i], LONG_MAX / count_) << "blob size exceeds LONG_MAX";
     }
     count_ *= shape[i];
     if (shape_[i] != shape[i]) {

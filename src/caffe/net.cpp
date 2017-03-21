@@ -125,6 +125,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   NetParameter filtered_param;
   FilterNet(in_param, &filtered_param);
 
+  bool no_default_layer_engine = (filtered_param.engine() == "");
+
   // Backward compatibility for obsolete compile-time flags
 #ifdef USE_MKL2017_AS_DEFAULT_ENGINE
   if (filtered_param.engine() == "") {
@@ -185,7 +187,6 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // LOG(ERROR) << "layer: " << layer_param.name() << " setup start";
 
     // LOG(ERROR) << "engine is: " << layer_param.engine();
-    bool no_default_layer_engine = (layer_param.engine() == "");
     if (param.engine() != "" && layer_param.engine() == "") {
         param.mutable_layer(layer_id)->set_engine(param.engine());
     }

@@ -104,7 +104,7 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
    // print weights
    sprintf(dump_name, "./%s_cpu_weights.txt", layer_name.c_str());
    fp = fopen(dump_name, "ab+");
-   // LOG(ERROR) << "[" << this->blobs_[0]->num() << ", " << this->blobs_[0]->channels() << ", " << this->blobs_[0]->height() << ", " << this->blobs_[0]->width() << "]";
+   // LOG(ERROR) << "[" << this->blobs_[0]->shape(0) << ", " << this->blobs_[0]->shape(1) << ", " << this->blobs_[0]->shape(2) << ", " << this->blobs_[0]->shape(3) << "]";
    for (int n = 0; n < 1; n++) {
      for (int c = 0; c < this->blobs_[0]->channels(); c++) {
        for (int h = 0; h < this->blobs_[0]->height(); h++) {

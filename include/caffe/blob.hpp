@@ -356,8 +356,8 @@ class Blob {
   shared_ptr<SyncedMemory> shape_data_;
 #endif
   vector<int> shape_;
-  int count_;
-  int capacity_;
+  long count_;
+  long capacity_;
 
 #ifdef DISTR_WEIGHT_UPDATE
   /* for distributed weight update */
