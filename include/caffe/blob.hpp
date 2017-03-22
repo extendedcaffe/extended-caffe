@@ -113,7 +113,7 @@ class Blob {
     return shape_[CanonicalAxisIndex(index)];
   }
   inline int num_axes() const { return shape_.size(); }
-  inline int count() const { return count_; }
+  inline long count() const { return count_; }
 
 #ifdef DISTR_WEIGHT_UPDATE
 

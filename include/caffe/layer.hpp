@@ -66,8 +66,8 @@ using namespace MLSL;
 #define LOG_BLOB(layer, blob, part, blob_id, description)              \
   do                                                                   \
   {                                                                    \
-      int elems_to_log = std::min(MAX_ELEMS_TO_LOG, blob->count());    \
-      for (int idx = 0; idx < elems_to_log; idx++)                     \
+      long elems_to_log = std::min(static_cast<long>(MAX_ELEMS_TO_LOG), blob->count());    \
+      for (long idx = 0; idx < elems_to_log; idx++)                     \
       {                                                                \
           LOG_LAYER(layer) << description                              \
                            << ", blob_id " << blob_id                  \
@@ -79,8 +79,8 @@ using namespace MLSL;
 #define LOG_PARAM_BLOB(blob, part, blob_id, description)               \
   do                                                                   \
   {                                                                    \
-      int elems_to_log = std::min(MAX_ELEMS_TO_LOG, blob->count());    \
-      for (int idx = 0; idx < elems_to_log; idx++)                     \
+      long elems_to_log = std::min(static_cast<long>(MAX_ELEMS_TO_LOG), blob->count());    \
+      for (long idx = 0; idx < elems_to_log; idx++)                     \
       {                                                                \
           DLOG(INFO) << description                                    \
                      << ", blob_id " << blob_id                        \
