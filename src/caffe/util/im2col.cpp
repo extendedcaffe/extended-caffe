@@ -124,6 +124,47 @@ void im2col_cpu(const Dtype* data_im, const int channels,
 #endif
 }
 
+template <typename Dtype>
+void im3d2col_cpu(const Dtype* data_im, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
+    Dtype* data_col) {
+  // Implicit dilated kernel size
+  int dil_kernel_h = (kernel_h - 1) * dilation_h + 1;
+  int dil_kernel_w = (kernel_w - 1) * dilation_w + 1;
+  int dil_kernel_d = (kernel_d - 1) * dilation_d + 1;
+  int height_col = (height + 2 * pad_h - dil_kernel_h) / stride_h + 1;
+  int width_col = (width + 2 * pad_w - dil_kernel_w) / stride_w + 1;
+  int depth_col = (depth + 2 * pad_d - dil_kernel_d) / stride_d + 1;
+  int channels_col = channels * kernel_h * kernel_w * kernel_d;
+#pragma omp parallel for
+  for (int c = 0; c < channels_col; ++c) {
+    int w_offset = c % kernel_w;
+    int h_offset = (c / kernel_w) % kernel_h;
+	int d_offset = (c / kernel_w / kernel_h)% kernel_d;
+    int c_im = c / kernel_h / kernel_w / kernel_d;
+	for (int d = 0; d < depth_col; ++d) {
+      int d_pad = d * stride_d - pad_d + d_offset * dilation_d;
+      for (int h = 0; h < height_col; ++h) {
+        int h_pad = h * stride_h - pad_h + h_offset * dilation_h;
+        for (int w = 0; w < width_col; ++w) {
+          int w_pad = w * stride_w - pad_w + w_offset * dilation_w;
+          if (h_pad >= 0 && h_pad < height
+              && w_pad >= 0 && w_pad < width
+              && d_pad >= 0 && d_pad < depth)
+            data_col[((c * depth_col + d) * height_col + h) * width_col + w] =
+              data_im[((c_im * depth + d_pad) * height + h_pad) * width + w_pad];
+          else
+            data_col[((c * depth_col + d) * height_col + h) * width_col + w] = 0.;
+        }
+      }
+    }
+  }
+}
+
 // Explicit instantiation
 template void im2col_cpu<float>(const float* data_im, const int channels,
     const int height, const int width, const int kernel_h, const int kernel_w,
@@ -134,6 +175,20 @@ template void im2col_cpu<double>(const double* data_im, const int channels,
     const int height, const int width, const int kernel_h, const int kernel_w,
     const int pad_h, const int pad_w, const int stride_h,
     const int stride_w, const int dilation_h, const int dilation_w,
+    double* data_col);
+template void im3d2col_cpu<float>(const float* data_im, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
+    float* data_col);
+template void im3d2col_cpu<double>(const double* data_im, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
     double* data_col);
 
 template <typename Dtype>
@@ -297,6 +352,49 @@ void col2im_cpu(const Dtype* data_col, const int channels,
 #endif
 }
 
+template <typename Dtype>
+void col2im3d_cpu(const Dtype* data_col, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
+    Dtype* data_im) {
+  // Implicit dilated patch
+  int dil_patch_h = (kernel_h - 1) * dilation_h + 1;
+  int dil_patch_w = (kernel_w - 1) * dilation_w + 1;
+  int dil_patch_d = (kernel_d - 1) * dilation_d + 1;
+  int height_col = (height + 2 * pad_h - dil_patch_h) / stride_h + 1;
+  int width_col = (width + 2 * pad_w - dil_patch_w) / stride_w + 1;
+  int depth_col = (depth + 2 * pad_d - dil_patch_d) / stride_d + 1;
+  int num_kernels = channels * height * width * depth;
+  int channels_col = channels * kernel_h * kernel_w * kernel_d;
+
+  caffe_set(num_kernels, Dtype(0), data_im);
+
+#pragma omp parallel for
+  for (int c = 0; c < channels_col; ++c) {
+    int w_offset = c % kernel_w;
+    int h_offset = (c / kernel_w) % kernel_h;
+    int d_offset = (c / kernel_w / kernel_h) % kernel_d;
+    int c_im = c / kernel_h / kernel_w / kernel_d;
+    for (int d = 0; d < depth_col; ++d) {
+      int d_pad = d * stride_d - pad_d + d_offset * dilation_d;
+      for (int h = 0; h < height_col; ++h) {
+        int h_pad = h * stride_h - pad_h + h_offset * dilation_h;
+        for (int w = 0; w < width_col; ++w) {
+          int w_pad = w * stride_w - pad_w + w_offset * dilation_w;
+          if (h_pad >= 0 && h_pad < height
+              && w_pad >= 0 && w_pad < width
+              && d_pad >= 0 && d_pad < depth)
+            data_im[((c_im * depth + d_pad) * height + h_pad) * width + w_pad] +=
+              data_col[((c * depth_col + d) * height_col + h) * width_col + w];
+        }
+      }
+    }
+  }
+}
+
 // Explicit instantiation
 template void col2im_cpu<float>(const float* data_col, const int channels,
     const int height, const int width, const int kernel_h, const int kernel_w,
@@ -307,6 +405,20 @@ template void col2im_cpu<double>(const double* data_col, const int channels,
     const int height, const int width, const int kernel_h, const int kernel_w,
     const int pad_h, const int pad_w, const int stride_h,
     const int stride_w, const int dilation_h, const int dilation_w,
+    double* data_im);
+template void col2im3d_cpu<float>(const float* data_col, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
+    float* data_im);
+template void col2im3d_cpu<double>(const double* data_col, const int channels,
+    const int depth, const int height, const int width,
+    const int kernel_d, const int kernel_h, const int kernel_w,
+    const int dilation_d, const int dilation_h, const int dilation_w,
+    const int pad_d, const int pad_h, const int pad_w,
+    const int stride_d, const int stride_h, const int stride_w,
     double* data_im);
 
 template <typename Dtype>
