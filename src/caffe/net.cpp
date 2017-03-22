@@ -107,6 +107,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   if (has_intel_knl_feature < 0) {
     has_intel_knl_feature = caffe::cpu::has_intel_knl_features();
   }
+  // LOG(ERROR) << "has AVX512: " << has_intel_knl_feature;
 
 #ifdef _OPENMP
   LOG(INFO) << "OpenMP is enabled";

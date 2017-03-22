@@ -413,10 +413,11 @@ class MKLBatchNormLayer : public Layer<Dtype> {
         variance_buffer_(static_cast<Dtype*>(NULL)),
         scaleShift_buffer_(static_cast<Dtype*>(NULL)),
         diffScaleShift_buffer_(static_cast<Dtype*>(NULL)),
-        layout_usr_(static_cast<dnnLayout_t>(NULL)),
-        blobs_initialized_(false),
-        use_global_stats_(false)
-      {}
+        layout_usr_(static_cast<dnnLayout_t>(NULL))
+      {
+        blobs_initialized_ = false;
+        use_global_stats_ = false;
+      }
 
   virtual ~MKLBatchNormLayer();
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
