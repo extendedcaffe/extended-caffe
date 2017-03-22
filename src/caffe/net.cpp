@@ -103,6 +103,11 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   CHECK(Caffe::root_solver() || root_net_)
       << "root_net_ needs to be set for all non-root solvers";
 
+  static int has_intel_knl_feature = -1;
+  if (has_intel_knl_feature < 0) {
+    has_intel_knl_feature = caffe::cpu::has_intel_knl_features();
+  }
+
 #ifdef _OPENMP
   LOG(INFO) << "OpenMP is enabled";
   static bool executed = false;
@@ -205,7 +210,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
           // !layer_param.name().compare("rpn_bbox_pred")
           (layer_param.type().compare("BatchNorm") &&
           layer_param.type().compare("ReLU") &&
-          layer_param.type().compare("Concat") &&
+          (layer_param.type().compare("Concat") || has_intel_knl_feature == 1) &&
           layer_param.type().compare("Convolution") &&
           layer_param.type().compare("LRN") &&
           layer_param.type().compare("Eltwise") &&

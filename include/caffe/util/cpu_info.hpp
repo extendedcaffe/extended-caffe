@@ -50,6 +50,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace caffe {
 namespace cpu {
 
+int has_intel_knl_features();
+
 struct Processor {
   unsigned processor;
   unsigned physicalId;

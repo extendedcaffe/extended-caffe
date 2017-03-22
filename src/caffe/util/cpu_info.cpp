@@ -47,6 +47,59 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace caffe {
 namespace cpu {
 
+#if defined(__INTEL_COMPILER) && (__INTEL_COMPILER >= 1300)
+
+#include <immintrin.h>
+int has_intel_knl_features() {
+  const unsigned long knl_features =
+      (_FEATURE_AVX512F | _FEATURE_AVX512ER |
+       _FEATURE_AVX512PF | _FEATURE_AVX512CD);
+  return _may_i_use_cpu_feature(knl_features);
+}
+#else /* non-Intel compiler */
+
+#include <stdint.h>
+static void run_cpuid(uint32_t eax, uint32_t ecx, uint32_t* abcd) {
+  uint32_t ebx = 0, edx = 0;
+#if defined(__i386__) && defined (__PIC__)
+  /* in case of PIC under 32-bit EBX cannot be clobbered */
+  __asm__ ("movl %%ebx, %%edi \n\t cpuid \n\t xchgl %%ebx, %%edi" : "=D" (ebx),
+# else
+  __asm__ ("cpuid" : "+b" (ebx),
+# endif
+              "+a" (eax), "+c" (ecx), "=d" (edx));
+  abcd[0] = eax;
+  abcd[1] = ebx;
+  abcd[2] = ecx;
+  abcd[3] = edx;
+}
+
+static int check_xcr0_zmm() {
+  uint32_t xcr0 = 0;
+  uint32_t zmm_ymm_xmm = (7 << 5) | (1 << 2) | (1 << 1);
+  __asm__ ("xgetbv" : "=a" (xcr0) : "c" (0) : "%edx");
+  return ((xcr0 & zmm_ymm_xmm) == zmm_ymm_xmm); /* check if xmm, zmm and zmm state are enabled in XCR0 */
+}
+
+int has_intel_knl_features() {
+  uint32_t abcd[4];
+  uint32_t osxsave_mask = (1 << 27);
+
+  run_cpuid(1, 0, abcd);
+  // step 1 - must ensure OS supports extended processor state management
+  if ((abcd[2] & osxsave_mask) != osxsave_mask) {
+    return 0;
+  }
+
+  // step 2 - must ensure OS supports ZMM registers (and YMM, and XMM)
+  if (!check_xcr0_zmm()) {
+    return 0;
+  }
+
+  return 1;
+}
+#endif /* non-Intel compiler */
+
 Processor::Processor() {
   processor = 0;
   physicalId = 0;
