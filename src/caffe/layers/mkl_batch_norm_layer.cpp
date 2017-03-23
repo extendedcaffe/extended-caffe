@@ -112,10 +112,6 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
   bwd_bottom_diff->create_user_layout(dim, sizes, strides, false);
   bwd_top_diff   ->create_user_layout(dim, sizes, strides, false);
 
-  dnnReleaseBuffer<Dtype>(mean_buffer_);
-  dnnReleaseBuffer<Dtype>(variance_buffer_);
-  dnnReleaseBuffer<Dtype>(scaleShift_buffer_);
-  dnnReleaseBuffer<Dtype>(diffScaleShift_buffer_);
   // "Lazy" allocation because here we don't know
   // what layout is used by neighbours.
 
@@ -132,6 +128,11 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
       return;
   }
 
+  dnnReleaseBuffer<Dtype>(mean_buffer_);
+  dnnReleaseBuffer<Dtype>(variance_buffer_);
+  dnnReleaseBuffer<Dtype>(scaleShift_buffer_);
+  dnnReleaseBuffer<Dtype>(diffScaleShift_buffer_);
+
   this->blobs_.resize(3);
   if (use_weight_bias_) {
     if ( bias_term_ ) {
@@ -145,7 +146,6 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
   vector<int> scaleshift_shape(1);
   scaleshift_shape[0] = channels_;
 
-  // scale
   if (this->blobs_.size() > 3) {
       // scale
       this->blobs_[3].reset(new Blob<Dtype>(scaleshift_shape));
@@ -167,8 +167,8 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
           bias_filler_param.set_type("constant");
           bias_filler_param.set_value(0);
         }
-      shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(bias_filler_param));
-      bias_filler->Fill(this->blobs_[4].get());
+        shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(bias_filler_param));
+        bias_filler->Fill(this->blobs_[4].get());
       }
   }
 
@@ -458,11 +458,35 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
     char dump_name[256] = {0};
 
 #if 1
-   // print top diff
+   // print scale shift
    sprintf(dump_name, "./%s_mkl_scaleshift.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
    for (int n = 0; n < channels_ * 2; n++) {
       fprintf(fp, "%f, ", scaleShift_buffer_[n]);
+   }
+   fprintf(fp, "\n");
+   fclose(fp);
+   fp = NULL;
+#endif
+
+#if 1
+   // print mean
+   sprintf(dump_name, "./%s_mkl_mean.txt", this->layer_param_.name().c_str());
+   fp = fopen(dump_name, "ab+");
+   for (int n = 0; n < channels_; n++) {
+      fprintf(fp, "%f, ", mean_buffer_[n]);
+   }
+   fprintf(fp, "\n");
+   fclose(fp);
+   fp = NULL;
+#endif
+
+#if 1
+   // print variance
+   sprintf(dump_name, "./%s_mkl_variance.txt", this->layer_param_.name().c_str());
+   fp = fopen(dump_name, "ab+");
+   for (int n = 0; n < channels_; n++) {
+      fprintf(fp, "%f, ", variance_buffer_[n]);
    }
    fprintf(fp, "\n");
    fclose(fp);
@@ -486,6 +510,25 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
    fclose(fp);
    fp = NULL;
 #endif
+
+#if 1
+   // print top
+   sprintf(dump_name, "./%s_mkl_top.txt", this->layer_param_.name().c_str());
+   fp = fopen(dump_name, "ab+");
+   for (int n = 0; n < 1; n++) {
+     for (int c = 0; c < 1; c++) {
+       for (int h = 0; h < 1; h++) {
+         for (int w = 0; w < 1; w++) {
+            fprintf(fp, "%f, ", top[0]->data_at(n, c, h, w));
+         }
+       }
+     }
+   }
+   fprintf(fp, "\n");
+   fclose(fp);
+   fp = NULL;
+#endif
+ 
    if (isnan(bottom[0]->data_at(0, 0, 0, 0)) || bottom[0]->data_at(0, 0, 0, 0) > 1000 || bottom[0]->data_at(0, 0, 0, 0) < -1000) {
      LOG(ERROR) << "bottom abnormal";
      exit(-1);
@@ -512,12 +555,12 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
             reinterpret_cast<void *>(
                         const_cast<Dtype*>(bottom[0]->prv_data()));
     if (NULL == bottom_data) {
-	  // LOG(ERROR) << "use cpu bottom data";
+      // LOG(ERROR) << "use cpu bottom data";
       bottom_data =
             reinterpret_cast<void *>(
                         const_cast<Dtype*>(bottom[0]->cpu_data()));
     } else {
-	  // LOG(ERROR) << "use prv bottom data";
+      // LOG(ERROR) << "use prv bottom data";
     }
   }
 
