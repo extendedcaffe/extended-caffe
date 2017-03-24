@@ -93,7 +93,7 @@ void MKLPoolingLayer<Dtype>::Init(
   } else {
     if (pool_param.kernel_size_size()) {
           CHECK(pool_param.kernel_size_size() == 1 || pool_param.kernel_size_size() == 2)
-          << "kernel_size must be specified once, or 2 values for Height and Width";;
+          << "kernel_size must be specified once, or 2 values for Height and Width";
           if (pool_param.kernel_size_size() == 1) {
             kernel_h_ = kernel_w_ = pool_param.kernel_size(0);
           } else {

@@ -92,7 +92,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       } else {
         if (pool_param.kernel_size_size()) {
           CHECK(pool_param.kernel_size_size() == 1 || pool_param.kernel_size_size() == 2)
-              << "kernel_size must be specified once, or 2 values for Height and Width";;
+              << "kernel_size must be specified once, or 2 values for Height and Width";
           if (pool_param.kernel_size_size() == 1) {
               kernel_h_ = kernel_w_ = pool_param.kernel_size(0);
           } else {
@@ -108,7 +108,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       CHECK_GT(kernel_w_, 0) << "Filter dimensions cannot be zero.";
       if (!pool_param.has_pad_h()) {
           CHECK(pool_param.pad_size() == 1 || pool_param.pad_size() == 2)
-              << "pad must be specified once, or 2 values for Height and Width";;
+              << "pad must be specified once, or 2 values for Height and Width";
           if (pool_param.pad_size() == 1) {
               pad_h_ = pad_w_ = pool_param.pad(0);
           } else {
@@ -121,7 +121,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       }
       if (!pool_param.has_stride_h()) {
           CHECK(pool_param.stride_size() == 1 || pool_param.stride_size() == 2)
-              << "stride must be specified once, or 2 values for Height and Width";;
+              << "stride must be specified once, or 2 values for Height and Width";
           if (pool_param.stride_size() == 1) {
               stride_h_ = stride_w_ = pool_param.stride(0);
           } else {
@@ -223,7 +223,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
             CHECK_EQ(num_spatial_axes_, 2)
               << "kernel_h & kernel_w can only be used for 2D pooling.";
             CHECK_EQ(0, pool_param.kernel_size_size())
-              << "Either kernel_size or kernel_h/w should be specified; not both.";
+              << "Either kernel_size or kernel_h/w should be specified, not both.";
             kernel_shape_data[0] = pool_param.kernel_h();
             kernel_shape_data[1] = pool_param.kernel_w();
         } else {
@@ -231,8 +231,8 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
             const int num_kernel_dims = pool_param.kernel_size_size();
             CHECK(num_kernel_dims == 1 || num_kernel_dims == num_spatial_axes_)
               << "kernel_size must be specified once, or once per spatial dimension"
-              << " (kernel_size specified " << num_kernel_dims << " times; "
-              << num_spatial_axes_ << " spatial dims);";
+              << " (kernel_size specified " << num_kernel_dims << " times "
+              << num_spatial_axes_ << " spatial dims).";
             for (int i = 0; i < num_spatial_axes_; ++i) {
                 kernel_shape_data[i] = pool_param.kernel_size((num_kernel_dims == 1) ? 0 : i);
             }
@@ -253,7 +253,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
           CHECK_EQ(num_spatial_axes_, 2)
             << "pad_h & pad_w can only be used for 2D convolution.";
           CHECK_EQ(0, pool_param.pad_size())
-            << "Either pad or pad_h/w should be specified; not both.";
+            << "Either pad or pad_h/w should be specified, not both.";
           pad_data[0] = pool_param.pad_h();
           pad_data[1] = pool_param.pad_w();
       } else {
@@ -262,8 +262,8 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         CHECK(num_pad_dims == 0 || num_pad_dims == 1 ||
               num_pad_dims == num_spatial_axes_)
             << "pad must be specified once, or once per spatial dimension "
-            << "(pad specified " << num_pad_dims << " times; "
-            << num_spatial_axes_ << " spatial dims);";
+            << "(pad specified " << num_pad_dims << " times "
+            << num_spatial_axes_ << " spatial dims).";
         const int kDefaultPad = 0;
         for (int i = 0; i < num_spatial_axes_; ++i) {
           pad_data[i] = (num_pad_dims == 0) ? kDefaultPad :
@@ -292,7 +292,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         CHECK_EQ(num_spatial_axes_, 2)
             << "stride_h & stride_w can only be used for 2D convolution.";
         CHECK_EQ(0, pool_param.stride_size())
-            << "Either stride or stride_h/w should be specified; not both.";
+            << "Either stride or stride_h/w should be specified, not both.";
         stride_data[0] = pool_param.stride_h();
         stride_data[1] = pool_param.stride_w();
       } else {
@@ -301,8 +301,8 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         CHECK(num_stride_dims == 0 || num_stride_dims == 1 ||
               num_stride_dims == num_spatial_axes_)
             << "stride must be specified once, or once per spatial dimension "
-            << "(stride specified " << num_stride_dims << " times; "
-            << num_spatial_axes_ << " spatial dims);";
+            << "(stride specified " << num_stride_dims << " times "
+            << num_spatial_axes_ << " spatial dims).";
         const int kDefaultStride = 1;
         for (int i = 0; i < num_spatial_axes_; ++i) {
           stride_data[i] = (num_stride_dims == 0) ? kDefaultStride :
@@ -333,7 +333,7 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   if (num_spatial_axes_ == 2) {
       // Process 2D Pooling
       CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
-          << "corresponding to (num, channels, height, width)";
+          << "corresponding to (num, channels, height, width).";
       channels_ = bottom[0]->channels();
       height_ = bottom[0]->height();
       width_ = bottom[0]->width();
