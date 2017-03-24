@@ -9,7 +9,7 @@
 
 #include "thrust/device_vector.h"
 
-#include "caffe/layers/smooth_l1_loss_ohem_layer.hpp"
+#include "caffe/layers/smooth_L1_loss_ohem_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 
 namespace caffe {
