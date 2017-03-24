@@ -128,7 +128,7 @@ void MKLPoolingLayer<Dtype>::Init(
     CHECK(pool_param.stride_size() < 3)
         << "stride must be specified no more than 3 dimensions";
     if (pool_param.stride_size() == 0) {
-      stride_h_ = stride_w_ = 0;
+      stride_h_ = stride_w_ = 1;
     } else if (pool_param.stride_size() == 1) {
       stride_h_ = stride_w_ = pool_param.stride(0);
     } else {
