@@ -164,9 +164,13 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   CompileNet(param_with_splits, &param);
 
   // Printing processed model
-  LOG_IF(INFO, Caffe::root_solver())
-      << "Initializing net from parameters: " << std::endl
-      << param.DebugString();
+  if (Caffe::root_solver()) {
+    LOG(INFO) << "Initializing net from parameters: " << std::endl;
+    LOG(INFO).flush();
+    fflush(0);
+    param.PrintDebugString();
+    fflush(0);
+  }
 
   // Basically, build all the layers and set up their connections.
   name_ = param.name();
@@ -285,6 +289,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
         !layer_param.type().compare("ImageData")  ||
         !layer_param.type().compare("HDF5Data")   ||
         !layer_param.type().compare("MemoryData") ||
+        !layer_param.type().compare("Input") ||
         !layer_param.type().compare("WindowData")) {
 
         // FIXME: retrieve batch_size from top[0]->shape[0] when MLSL stuff will be moved from LayerSetUp
@@ -1068,7 +1073,7 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     }
     const int learnable_param_id = learnable_params_.size();
     if (!params_[net_param_id].get()) {
-	LOG(FATAL) << "layer: " << layer_names_[layer_id] << " param: " << param_name << " is NULL";
+      LOG(FATAL) << "layer: " << layer_names_[layer_id] << " param: " << param_name << " is NULL";
     }
     learnable_params_.push_back(params_[net_param_id].get());
     learnable_param_ids_.push_back(learnable_param_id);
@@ -1155,6 +1160,7 @@ Dtype Net<Dtype>::ForwardFromTo(int start, int end) {
         // LOG(ERROR) << "Forwarding " << layer_names_[i] << " start";
     }
 
+    PERFORMANCE_MEASUREMENT_BEGIN();
     Dtype layer_loss = layers_[i]->Forward(bottom_vecs_[i], top_vecs_[i]);
     // LOG(ERROR) << layer_names_[i] << " forward done";
 

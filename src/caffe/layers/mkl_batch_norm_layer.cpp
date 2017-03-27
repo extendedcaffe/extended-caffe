@@ -58,7 +58,6 @@ MKLBatchNormLayer<Dtype>::~MKLBatchNormLayer() {
   dnnReleaseBuffer<Dtype>(diffScaleShift_buffer_);
 }
 
-
 template <typename Dtype>
 void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -183,7 +182,6 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
     caffe_set(this->blobs_[i]->count(), Dtype(0),
               this->blobs_[i]->mutable_cpu_data());
   }
-
 
   // Mask statistics from optimization by setting local learning rates
   // for mean, variance, and the bias correction to zero.
@@ -432,10 +430,11 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
     DLOG(INFO) << "Using cpu_data for top in DnnBatchNorm.";
   }
 
+  PERFORMANCE_EVENT_ID_INIT(perf_id_fw_, PERFORMANCE_MKL_NAME("FW"));
   PERFORMANCE_MEASUREMENT_BEGIN();
   e = dnnExecute<Dtype>(use_global_stats_? batchNormFwdInference : batchNormFwd,
                                                                  BatchNorm_res);
-  PERFORMANCE_MEASUREMENT_END_MKL("FW");
+  PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
   CHECK_EQ(e, E_SUCCESS);
 
   if (!use_global_stats_) {
@@ -559,8 +558,6 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
       bottom_data =
             reinterpret_cast<void *>(
                         const_cast<Dtype*>(bottom[0]->cpu_data()));
-    } else {
-      // LOG(ERROR) << "use prv bottom data";
     }
   }
 
@@ -582,9 +579,10 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
     BatchNorm_res[dnnResourceDiffSrc] = bottom[0]->mutable_cpu_diff();
   }
 
+  PERFORMANCE_EVENT_ID_INIT(perf_id_bw_, PERFORMANCE_MKL_NAME("BW"));
   PERFORMANCE_MEASUREMENT_BEGIN();
   e = dnnExecute<Dtype>(batchNormBwd, BatchNorm_res);
-  PERFORMANCE_MEASUREMENT_END_MKL("BW");
+  PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_);
   CHECK_EQ(e, E_SUCCESS);
 
   if (use_weight_bias_) {
@@ -708,7 +706,6 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
 #endif
   }
 #endif
-
 }
 
 

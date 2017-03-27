@@ -64,11 +64,9 @@ template <typename Dtype>
 void SoftmaxLayer<Dtype>::Forward_cpu_fast_case(
     const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
-  const Dtype* mult = sum_multiplier_.cpu_data();
   int channels = bottom[0]->shape(softmax_axis_);
   int dim = bottom[0]->count() / outer_num_;
   // assert(dim == channels);
-
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
@@ -76,30 +74,28 @@ void SoftmaxLayer<Dtype>::Forward_cpu_fast_case(
     const Dtype* bottom_data = bottom[0]->cpu_data() + i*dim;
     Dtype *top_data = top[0]->mutable_cpu_data() + channels*i;
 
-    caffe_copy(dim, bottom_data, top_data);
-
     Dtype scale_data = bottom_data[0];
-    for (int j = 1; j < channels; j++) {
+    for (int j = 1; j < channels; ++j) {
         scale_data = std::max(scale_data, bottom_data[j]);
     }
 
     // subtraction
-    for (int j = 0; j < channels; ++j)
-        top_data[j] -= scale_data * mult[j];
+    for (int j = 0; j < channels; j++) {
+      top_data[j] = bottom_data[j] - scale_data;
+    }
 
     // exponentiation
     // FIXME_valgrind: caffe_exp<Dtype>(dim, top_data, top_data);
     caffe_exp<Dtype>(dim, top_data, top_data);
 
     // sum after exp
-    scale_data = 0;
-    for (int j = 0; j < channels; ++j)
-        scale_data += top_data[j] * mult[j];
+    scale_data = top_data[0];
+    for (int j = 1; j < channels; j++) {
+      scale_data += top_data[j];
+    }
 
     // division
-    for (int j = 0; j < channels; j++) {
-      caffe_div(inner_num_, top_data + j, &scale_data, top_data + j);
-    }
+    caffe_scal(dim, Dtype(1) / scale_data, top_data);
   }
 }
 
@@ -132,7 +128,6 @@ void SoftmaxLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       }
       scale_data[k] = max_val;
     }
-
     // subtraction
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels, inner_num_,
         1, -1., sum_multiplier_.cpu_data(), scale_data, 1., top_data);

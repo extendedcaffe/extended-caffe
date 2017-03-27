@@ -149,8 +149,6 @@ void ConcatLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const int bottom_concat_axis = bottom[i]->shape(concat_axis_);
     const int offset_value = offset_concat_axis;
     offset_concat_axis += bottom_concat_axis;
-
-    LOG(ERROR) << "num concat: " << num_concats_;
 #ifdef _OPENMP
   #pragma omp parallel for if(num_concats_ > 1)
 #endif

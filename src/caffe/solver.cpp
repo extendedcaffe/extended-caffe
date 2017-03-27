@@ -98,11 +98,17 @@ template <typename Dtype>
 void Solver<Dtype>::Init(const SolverParameter& param) {
   CHECK(Caffe::root_solver() || root_solver_)
       << "root_solver_ needs to be set for all non-root solvers";
-  LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
-    << std::endl << param.DebugString();
   param_ = param;
+
+#ifdef USE_MLSL
+  ReplaceMultinodeSolverParams(&param_);
+#endif
+
+  LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
+    << std::endl << param_.DebugString();
+
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
-#if !defined(USE_MPI) && !defined(USE_MLSL)
+#ifndef USE_MLSL
   CheckSnapshotWritePermissions();
 #endif
   if (Caffe::root_solver() && param_.random_seed() >= 0) {
@@ -317,14 +323,8 @@ void Solver<Dtype>::Step(int iters) {
     //      << ", loss = " << smoothed_loss_;
 
     if (display) {
-#ifdef USE_MPI
-      LOG_IF(INFO, Caffe::root_solver())
-             << caffe::internode::mpi_get_current_proc_rank_as_string()
-             << " Iteration " << iter_ << ", loss = " << smoothed_loss_;
-#else
       LOG_IF(ERROR, Caffe::root_solver()) << "Iteration " << iter_
           << ", loss = " << smoothed_loss_;
-#endif
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
       for (int j = 0; j < result.size(); ++j) {
@@ -358,16 +358,19 @@ void Solver<Dtype>::Step(int iters) {
       callbacks_[i]->on_gradients_ready();
     }
     if (!param().disabled_update()) {
+      PERFORMANCE_MEASUREMENT_BEGIN();
       ApplyUpdate();
+      PERFORMANCE_MEASUREMENT_END_STATIC("weights_update");
     }
 
     iter_time += iter_timer.MilliSeconds();
 
 #ifdef CAFFE_PER_LAYER_TIMINGS
     if (MLSL::GetNodeId() == 0)
-        LOG(INFO) << "iter " << iter_ << ", forward_backward_update_time: " << iter_time << " ms";
+        LOG(INFO) << "iter " << iter_ << ", forward_backward_update_time: "
+                << iter_time << " ms";
 #endif
-    
+
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.
     ++iter_;
@@ -392,14 +395,12 @@ void Solver<Dtype>::Step(int iters) {
   ResetTimers();
   PrintTimers(true);
 #endif
-
 }
 
 #ifdef CAFFE_PER_LAYER_TIMINGS
 
 template <typename Dtype>
 void Solver<Dtype>::InitTimers() {
-
   int layer_count = net_->layers().size();
 
   this->forward_time_per_layer.resize(layer_count, 0.0);
@@ -413,7 +414,6 @@ void Solver<Dtype>::InitTimers() {
 
 template <typename Dtype>
 void Solver<Dtype>::ResetTimers() {
-
   std::transform(this->forward_time_per_layer_total.begin(),
                  this->forward_time_per_layer_total.end(),
                  this->forward_time_per_layer.begin(),
@@ -432,19 +432,16 @@ void Solver<Dtype>::ResetTimers() {
                  this->update_time_per_layer_total.begin(),
                  std::plus<int>());
 
-  std::fill(this->forward_time_per_layer.begin(), this->forward_time_per_layer.end(), 0);
-  std::fill(this->backward_time_per_layer.begin(), this->backward_time_per_layer.end(), 0);
-  std::fill(this->update_time_per_layer.begin(), this->update_time_per_layer.end(), 0);
+  std::fill(this->forward_time_per_layer.begin(),
+          this->forward_time_per_layer.end(), 0);
+  std::fill(this->backward_time_per_layer.begin(),
+          this->backward_time_per_layer.end(), 0);
+  std::fill(this->update_time_per_layer.begin(),
+          this->update_time_per_layer.end(), 0);
 }
 
 template <typename Dtype>
 void Solver<Dtype>::PrintTimers(bool printTotal) {
-
-#ifdef USE_MPI
-    if (caffe::internode::mpi_get_current_proc_rank())
-        return;
-#endif
-
 #ifdef USE_MLSL
     if (MLSL::GetNodeId())
        return;
@@ -453,39 +450,49 @@ void Solver<Dtype>::PrintTimers(bool printTotal) {
     LOG(WARNING) << std::endl;
     LOG(WARNING) << "####################################################";
 
-    std::vector<double>& forward_timers = printTotal ? forward_time_per_layer_total : forward_time_per_layer;
-    std::vector<double>& backward_timers = printTotal ? backward_time_per_layer_total : backward_time_per_layer;
-    std::vector<double>& update_timers = printTotal ? update_time_per_layer_total : update_time_per_layer;
+    std::vector<double>& forward_timers = printTotal ?
+        forward_time_per_layer_total : forward_time_per_layer;
+    std::vector<double>& backward_timers = printTotal ?
+        backward_time_per_layer_total : backward_time_per_layer;
+    std::vector<double>& update_timers = printTotal ?
+        update_time_per_layer_total : update_time_per_layer;
     std::string prefix = printTotal ? "TOTAL " : "DELTA ";
 
-    double forward_time = std::accumulate(forward_timers.begin(), forward_timers.end(), 0) / 1000;
+    double forward_time = std::accumulate(forward_timers.begin(),
+            forward_timers.end(), 0) / 1000;
     LOG(WARNING) << prefix << "FORWARD TIME: " << forward_time << " ms";
     for (int layer_idx = 0; layer_idx < net_->layers().size(); layer_idx++) {
         LOG(WARNING) << "LAYER-" << layer_idx << " "
                      << net_->layers()[layer_idx]->type()
-                     << ": forward_time: " << forward_timers[layer_idx] / 1000 << " ms";
+                     << ": forward_time: " << forward_timers[layer_idx] / 1000
+                     << " ms";
     }
     LOG(WARNING) << std::endl;
 
-    double backward_time = std::accumulate(backward_timers.begin(), backward_timers.end(), 0) / 1000;
+    double backward_time = std::accumulate(backward_timers.begin(),
+            backward_timers.end(), 0) / 1000;
     LOG(WARNING) << prefix << "BACKWARD TIME: " << backward_time << " ms";
     for (int layer_idx = 0; layer_idx < net_->layers().size(); layer_idx++) {
         LOG(WARNING) << "LAYER-" << layer_idx << " "
                      << net_->layers()[layer_idx]->type()
-                     << ": backward_time: " << backward_timers[layer_idx] / 1000 << " ms";
+                     << ": backward_time: " << backward_timers[layer_idx] / 1000
+                     << " ms";
     }
     LOG(WARNING) << std::endl;
 
-    double update_time = std::accumulate(update_timers.begin(), update_timers.end(), 0) / 1000;
+    double update_time = std::accumulate(update_timers.begin(),
+            update_timers.end(), 0) / 1000;
     LOG(WARNING) << prefix << "UPDATE TIME: " << update_time << " ms";
     for (int layer_idx = 0; layer_idx < net_->layers().size(); layer_idx++) {
         LOG(WARNING) << "LAYER-" << layer_idx << " "
                      << net_->layers()[layer_idx]->type()
-                     << ": update_time: " << update_timers[layer_idx] / 1000 << " ms";
+                     << ": update_time: " << update_timers[layer_idx] / 1000
+                     << " ms";
     }
     LOG(WARNING) << std::endl;
 
-    LOG(WARNING) << prefix << "TIME (F+B+U): " << (forward_time + backward_time + update_time) / 1000 << " sec";
+    LOG(WARNING) << prefix << "TIME (F+B+U): " << (forward_time +
+            backward_time + update_time) / 1000 << " sec";
     LOG(WARNING) << "####################################################";
     LOG(WARNING) << std::endl;
 }
@@ -534,16 +541,11 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     net_->Forward(&loss);
 
     UpdateSmoothedLoss(loss, start_iter, average_loss);
-
-#ifdef USE_MPI
-    LOG(INFO) << caffe::internode::mpi_get_current_proc_rank_as_string()
-              << " Iteration " << iter_ << ", loss = " << smoothed_loss_;
-#else
     LOG(INFO) << "Iteration " << iter_ << ", loss = " << smoothed_loss_;
-#endif
   }
 
-#if !defined(USE_MPI) && !defined(USE_MLSL) // in multinode last test must be done after weights update
+#ifndef USE_MLSL
+  // in multinode last test must be done after weights update
   if (param_.test_interval() && iter_ % param_.test_interval() == 0)
     TestAll();
 #endif
@@ -617,7 +619,8 @@ void Solver<Dtype>::Test(const int test_net_id) {
   }
   if (param_.test_compute_loss()) {
 #ifdef USE_MLSL
-    MPI_Allreduce(MPI_IN_PLACE, &loss, 1, sizeof(Dtype) == 4 ? MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &loss, 1, sizeof(Dtype) == 4 ?
+        MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     loss /= (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
     if(MLSL::GetNodeId() == 0) LOG(INFO) << "Test loss: " << loss;
 #else /* !USE_MLSL */
@@ -626,8 +629,9 @@ void Solver<Dtype>::Test(const int test_net_id) {
 #endif /* USE_MLSL */
   }
 #ifdef USE_MLSL
-  MPI_Allreduce(MPI_IN_PLACE, test_score.data(), test_score.size(), sizeof(Dtype) == 4 ? MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  if(MLSL::GetNodeId() == 0)
+  MPI_Allreduce(MPI_IN_PLACE, test_score.data(), test_score.size(),
+          sizeof(Dtype) == 4 ? MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  if (MLSL::GetNodeId() == 0)
 #endif /* USE_MLSL */
   for (int i = 0; i < test_score.size(); ++i) {
     const int output_blob_index =
@@ -636,7 +640,8 @@ void Solver<Dtype>::Test(const int test_net_id) {
     const Dtype loss_weight = test_net->blob_loss_weights()[output_blob_index];
     ostringstream loss_msg_stream;
 #ifdef USE_MLSL
-    const Dtype mean_score = test_score[i] / (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
+    const Dtype mean_score =
+      test_score[i] / (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
 #else /* !USE_MLSL */
     const Dtype mean_score = test_score[i] / param_.test_iter(test_net_id);
 #endif /* USE_MLSL */
@@ -654,7 +659,7 @@ void Solver<Dtype>::Snapshot() {
   CHECK(Caffe::root_solver());
 
 #ifdef USE_MLSL
-  if(MLSL::GetNodeId() != 0) return;
+  if (MLSL::GetNodeId() != 0) return;
 #endif /* USE_MLSL */
 
   string model_filename;

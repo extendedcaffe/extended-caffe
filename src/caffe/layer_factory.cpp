@@ -230,7 +230,7 @@ shared_ptr<Layer<Dtype> > GetPoolingLayer(const LayerParameter& param) {
 #ifdef MKLDNN_SUPPORTED
     else if (ep.isEngine("MKLDNN")) {
       PoolingParameter_PoolMethod method = param.pooling_param().pool();
-      if (method == PoolingParameter_PoolMethod_MAX)
+      if (method != PoolingParameter_PoolMethod_STOCHASTIC)
         engine = PoolingParameter_Engine_MKLDNN;
     }
 #endif
@@ -403,6 +403,10 @@ shared_ptr<Layer<Dtype> > GetSplitLayer(const LayerParameter& param) {
     else if (ep.isEngine("MKL2017"))
       engine = SplitParameter_Engine_MKL2017;
 #endif
+#if defined(MKLDNN_SUPPORTED)
+    else if (ep.isEngine("MKLDNN"))
+      engine = SplitParameter_Engine_MKLDNN;
+#endif
   }
 
   if (engine == SplitParameter_Engine_DEFAULT) {
@@ -414,6 +418,10 @@ shared_ptr<Layer<Dtype> > GetSplitLayer(const LayerParameter& param) {
 #if defined(MKL2017_SUPPORTED)
   } else if (engine == SplitParameter_Engine_MKL2017) {
     return shared_ptr<Layer<Dtype> >(new MKLSplitLayer<Dtype>(param));
+#endif
+#if defined(MKLDNN_SUPPORTED)
+  } else if(engine == SplitParameter_Engine_MKLDNN) {
+    return shared_ptr<Layer<Dtype> >(new MKLDNNSplitLayer<Dtype>(param));
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
@@ -520,7 +528,7 @@ shared_ptr<Layer<Dtype> > GetConcatLayer(const LayerParameter& param) {
 
 REGISTER_LAYER_CREATOR(Concat, GetConcatLayer);
 
-// Get concat layer according to engine.
+// Get Eltwise layer according to engine.
 template <typename Dtype>
 shared_ptr<Layer<Dtype> > GetEltwiseLayer(const LayerParameter& param) {
   EltwiseParameter_Engine engine = param.eltwise_param().engine();
@@ -534,6 +542,10 @@ shared_ptr<Layer<Dtype> > GetEltwiseLayer(const LayerParameter& param) {
     else if (ep.isEngine("MKL2017"))
       engine = EltwiseParameter_Engine_MKL2017;
 #endif
+#if defined(MKLDNN_SUPPORTED)
+    else if (ep.isEngine("MKLDNN"))
+      engine = EltwiseParameter_Engine_MKLDNN;
+#endif
   }
 
   if (engine == EltwiseParameter_Engine_DEFAULT) {
@@ -545,6 +557,10 @@ shared_ptr<Layer<Dtype> > GetEltwiseLayer(const LayerParameter& param) {
 #if defined(MKL2017_SUPPORTED)
   } else if (engine == EltwiseParameter_Engine_MKL2017) {
     return shared_ptr<Layer<Dtype> >(new MKLEltwiseLayer<Dtype>(param));
+#endif
+#ifdef MKLDNN_SUPPORTED
+  } else if (engine == EltwiseParameter_Engine_MKLDNN) {
+    return shared_ptr<Layer<Dtype> >(new MKLDNNEltwiseLayer<Dtype>(param));
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknow engine.";
