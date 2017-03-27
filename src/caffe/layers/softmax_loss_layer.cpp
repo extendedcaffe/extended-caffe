@@ -164,7 +164,7 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
     count_local = 0;
     loss_local = Dtype(0);
 #ifdef _OPENMP
-  #pragma omp parallel for reduction(+:loss_local, count_local)
+  #pragma omp parallel for reduction(+: loss_local, count_local) if(inner_num_ > 1)
 #endif
     for (int j = 0; j < inner_num_; j++) {
       const int label_value = static_cast<int>(label[i * inner_num_ + j]);
