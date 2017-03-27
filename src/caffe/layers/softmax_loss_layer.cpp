@@ -157,10 +157,12 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
   int dim = prob_.count() / outer_num_;
   int count = 0;
   int count_local = 0;
-  Dtype loss = 0;
-  Dtype loss_local = 0.0;
+  Dtype loss = Dtype(0);
+  Dtype loss_local = Dtype(0);
 
   for (int i = 0; i < outer_num_; ++i) {
+    count_local = 0;
+    loss_local = Dtype(0);
 #ifdef _OPENMP
   #pragma omp parallel for reduction(+:loss_local, count_local)
 #endif
@@ -179,6 +181,9 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
     count += count_local;
     loss -= loss_local;
   }
+  // LOG(ERROR) << "outer num: " << outer_num_ << ", inner_num_: " << inner_num_;
+  // LOG(ERROR) << "count: " << count << ", loss: " << loss;
+
   Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
       normalization_, outer_num_, inner_num_, count);
   top[0]->mutable_cpu_data()[0] = loss / normalizer;
