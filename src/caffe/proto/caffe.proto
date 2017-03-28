@@ -21,61 +21,6 @@ message BlobProto {
   optional int32 width = 4 [default = 0];
 }
 
-//multinode related messages
-//******************************************************
-message ThresholdCompressionConfig {
-  optional float threshold = 1;
-  optional int32 size = 2 [default = 2];
-  optional float multiplier = 3 [default = 1.0];
-}
-
-enum CompressionAlgo {
-  COMPRESSION_NONE = 0;
-  COMPRESSION_AVERAGING = 1;
-}
-
-message CompressionParam {
-  optional CompressionAlgo algo = 1 [default = COMPRESSION_NONE];
-  optional ThresholdCompressionConfig threshold_param = 3;
-};
-
-message BlobPartInfo {
-  optional uint32 version = 1;
-  optional int32 layer_id = 2;
-  optional int32 blob_id = 3;
-  optional int32 part = 4;
-}
-
-message BlobUpdate {
-  optional BlobPartInfo info = 1;
-  optional uint32 iters = 5;
-  repeated BlobPartInfo ack = 2;
-  optional CompressionParam compression_param = 7;
-  optional bytes data = 8;
-}
-
-message ModelReq {
-  optional string name = 1;
-}
-
-message DataMsg {
-  repeated BlobShape shape = 6;
-  repeated bytes data = 7;
-}
-
-message DataReq {
-  optional string layer_name = 1;
-  optional int32 iters = 2;
-}
-
-message MultinodeParameter {
-  optional CompressionParam outgoing_compression = 2;
-  optional uint32 update_per_iters = 4 [default = 1];
-  optional uint32 max_packet_size = 5 [default = 65000];
-  optional uint32 wait_for_clients = 6 [default = 0];
-}
-//******************************************************
-
 // The BlobProtoVector is simply a way to pass multiple blobproto instances
 // around.
 message BlobProtoVector {
@@ -286,7 +231,7 @@ message SolverParameter {
 
   // RMSProp decay value
   // MeanSquare(t) = rms_decay*MeanSquare(t-1) + (1-rms_decay)*SquareGradient(t)
-  optional float rms_decay = 38;
+  optional float rms_decay = 38 [default = 0.99];
 
   // If true, print information about the state of the net that may help with
   // debugging learning problems.
@@ -308,7 +253,6 @@ message SolverParameter {
   // DEPRECATED: use type instead of solver_type
   optional SolverType solver_type = 30 [default = SGD];
 
-  optional MultinodeParameter multinode_param = 41;
   optional bool disabled_update = 42 [default = false];
   optional string engine = 43 [default = ""];
 }
@@ -481,10 +425,7 @@ message LayerParameter {
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
   optional SpatialDropoutParameter spatial_dropout_param = 180;
-  optional MILDataParameter mil_data_param = 0x004d4944; //"MID"
-  optional MILParameter mil_param = 0x004d494c; //"MIL"
   optional string engine = 151 [default = ""];
-  optional RemoteDataParameter remote_data_param = 152;
 }
 
 // Message that stores parameters used to apply transformation
@@ -581,6 +522,7 @@ message ConcatParameter {
 
   // DEPRECATED: alias for "axis" -- does not support negative indexing.
   optional uint32 concat_dim = 1 [default = 1];
+
   enum Engine {
     DEFAULT = 0;
     CAFFE = 1;
@@ -618,6 +560,7 @@ message SplitParameter {
     DEFAULT = 0;
     CAFFE = 1;
     MKL2017 = 3;
+    MKLDNN = 4;
   }
   optional Engine engine = 1 [default = DEFAULT];
 }
@@ -697,6 +640,7 @@ message ConvolutionParameter {
   optional uint32 group = 5 [default = 1]; // The group size for group conv
 
   optional FillerParameter weight_filler = 7; // The filler for the weight
+
   optional FillerParameter bias_filler = 8; // The filler for the bias
   enum Engine {
     DEFAULT = 0;
@@ -782,21 +726,7 @@ message DataParameter {
   optional bool shuffle = 11 [default = false];
 }
 
-message RemoteDataParameter {
-  optional string address = 1;
 
-  //cache_size equal 0 means it will cache everything,
-  //and will forward data from cache only
-  optional uint32 cache_size = 2;
-
-  enum CachePolicy {
-    PULL_CONTINOUSLY = 0; //will continously pull from data server
-    USE_CACHE_WHEN_FULL = 1; //when cache is full, than it will be repeated
-  }
-  optional CachePolicy policy = 3 [default = PULL_CONTINOUSLY];
-
-  repeated BlobShape shape = 5;
-}
 
 message DropoutParameter {
   optional float dropout_ratio = 1 [default = 0.5]; // dropout ratio
@@ -841,6 +771,7 @@ message EltwiseParameter {
     DEFAULT = 0;
     CAFFE = 1;
     MKL2017 = 3;
+    MKLDNN = 4;
   }
   optional Engine engine = 4 [default = DEFAULT];
 }
@@ -1347,16 +1278,6 @@ message ThresholdParameter {
   optional float threshold = 1 [default = 0]; // Strictly positive values
 }
 
-// Message that stores parameters used by MILLayer
-message MILParameter {
-  enum MILType {
-    MAX = 0;
-    NOR = 1;
-  }
-  optional MILType type = 1 [default = MAX]; // The MIL method
-}
-
-
 message WindowDataParameter {
   // Specify the data source.
   optional string source = 1;
@@ -1389,37 +1310,6 @@ message WindowDataParameter {
   // append root_folder to locate images
   optional string root_folder = 13 [default = ""];
 }
-
-message MILDataParameter {
-  // Specify the data source.
-  optional string source = 1;
-  
-  // Number of scales for each image
-  optional uint32 num_scales = 2 [default = 1];
-  
-  // Side length ratio between neighbouring scales
-  optional float scale_factor = 6 [default = 1];
-  
-  // Number of channels in the image
-  optional uint32 channels = 4 [default = 3];
-  
-  // Specify the number of images per batch
-  optional uint32 images_per_batch = 3;
-  // Specify the number of classes
-  optional uint32 n_classes = 5;
-  // specify the box_dir and label_dir
-  optional string label_file = 7;
-  
-  // Root directory which contains all the images
-  optional string root_dir = 11;
-  // Extention for the file
-  optional string ext = 12;
-  
-  // To randomize or not
-  optional bool randomize = 13 [default = true];
-}
-
-
 
 message SPPParameter {
   enum PoolMethod {
