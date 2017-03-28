@@ -35,6 +35,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/foreach.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 #include <fcntl.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
@@ -49,12 +56,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <fstream>  // NOLINT(readability/streams)
+#include <map>
 #include <string>
 #include <vector>
 
 #include "caffe/common.hpp"
-#include "caffe/internode/configuration.hpp"
-#include "caffe/multinode/SendCallback.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/io.hpp"
 

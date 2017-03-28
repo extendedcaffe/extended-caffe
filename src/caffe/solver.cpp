@@ -35,14 +35,17 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <algorithm>
+#include <map>
 #include <cstdio>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <numeric>
 
 #include "boost/bind.hpp"
-#include "caffe/internode/mpiutil.hpp"
 #include "caffe/solver.hpp"
 #include "caffe/util/format.hpp"
 #include "caffe/util/hdf5.hpp"
@@ -91,7 +94,7 @@ Solver<Dtype>::Solver(const string& param_file, const Solver* root_solver)
   ReadSolverParamsFromTextFileOrDie(param_file, &param);
   Init(param);
   Caffe::set_iter_size(param_.iter_size());
-  LOG(ERROR) << "Solver constructor done";
+  // LOG(ERROR) << "Solver constructor done";
 }
 
 template <typename Dtype>
@@ -126,7 +129,6 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
 #ifdef CAFFE_PER_LAYER_TIMINGS
   InitTimers();
 #endif
-
 }
 
 template <typename Dtype>
@@ -259,7 +261,6 @@ void Solver<Dtype>::InitTestNets() {
       test_nets_[i].reset(new Net<Dtype>(net_params[i],
           root_solver_->test_nets_[i].get()));
     }
-	LOG(INFO) << "---------------------debug" << param_.debug_info() << "   time " << param_.time_info();
     test_nets_[i]->set_debug_info(param_.debug_info());
 	test_nets_[i]->set_time_info(param_.time_info());
   }
@@ -622,7 +623,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
     MPI_Allreduce(MPI_IN_PLACE, &loss, 1, sizeof(Dtype) == 4 ?
         MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     loss /= (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
-    if(MLSL::GetNodeId() == 0) LOG(INFO) << "Test loss: " << loss;
+    if (MLSL::GetNodeId() == 0) LOG(INFO) << "Test loss: " << loss;
 #else /* !USE_MLSL */
     loss /= param_.test_iter(test_net_id);
     LOG(ERROR) << "Test loss: " << loss;

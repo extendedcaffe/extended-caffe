@@ -35,85 +35,86 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef MKLDNN_SUPPORTED
-#include <algorithm>
+#if defined(MKLDNN_SUPPORTED)
 #include <vector>
 
-#include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
-
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
 #include "caffe/filler.hpp"
-
 #include "caffe/layers/mkldnn_layers.hpp"
-
 #include "caffe/test/test_caffe_main.hpp"
 #include "caffe/test/test_gradient_check_util.hpp"
 
 namespace caffe {
-
 template <typename TypeParam>
-class MKLDNNNeuronLayerTest : public MultiDeviceTest<TypeParam> {
+class MKLDNNSplitLayerTest : public MultiDeviceTest<TypeParam> {
   typedef typename TypeParam::Dtype Dtype;
 
  protected:
-  MKLDNNNeuronLayerTest()
-      : blob_bottom_(new Blob<Dtype>(2, 4, 5, 5)),
-        blob_top_(new Blob<Dtype>()) {
-    Caffe::set_random_seed(1701);
+  MKLDNNSplitLayerTest()
+      : blob_bottom_(new Blob<Dtype>(2, 3, 6, 5)),
+        blob_top_a_(new Blob<Dtype>()),
+        blob_top_b_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
     GaussianFiller<Dtype> filler(filler_param);
     filler.Fill(this->blob_bottom_);
     blob_bottom_vec_.push_back(blob_bottom_);
-    blob_top_vec_.push_back(blob_top_);
+    blob_top_vec_.push_back(blob_top_a_);
+    blob_top_vec_.push_back(blob_top_b_);
   }
-  virtual ~MKLDNNNeuronLayerTest() { delete blob_bottom_; delete blob_top_; }
+  virtual ~MKLDNNSplitLayerTest() {
+    delete blob_bottom_;
+    delete blob_top_a_;
+    delete blob_top_b_;
+  }
   Blob<Dtype>* const blob_bottom_;
-  Blob<Dtype>* const blob_top_;
+  Blob<Dtype>* const blob_top_a_;
+  Blob<Dtype>* const blob_top_b_;
   vector<Blob<Dtype>*> blob_bottom_vec_;
   vector<Blob<Dtype>*> blob_top_vec_;
 };
 
 typedef ::testing::Types<CPUDevice<float> > TestDtypesCPU;
-TYPED_TEST_CASE(MKLDNNNeuronLayerTest, TestDtypesCPU);
+TYPED_TEST_CASE(MKLDNNSplitLayerTest, TestDtypesCPU);
 
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLU) {
+TYPED_TEST(MKLDNNSplitLayerTest, TestSetup) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
-  MKLDNNReLULayer<Dtype> layer(layer_param);
+  MKLDNNSplitLayer<Dtype> layer(layer_param);
+  layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+  EXPECT_EQ(this->blob_top_a_->num(), 2);
+  EXPECT_EQ(this->blob_top_a_->channels(), 3);
+  EXPECT_EQ(this->blob_top_a_->height(), 6);
+  EXPECT_EQ(this->blob_top_a_->width(), 5);
+  EXPECT_EQ(this->blob_top_b_->num(), 2);
+  EXPECT_EQ(this->blob_top_b_->channels(), 3);
+  EXPECT_EQ(this->blob_top_b_->height(), 6);
+  EXPECT_EQ(this->blob_top_b_->width(), 5);
+}
+
+TYPED_TEST(MKLDNNSplitLayerTest, Test) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  MKLDNNSplitLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
-  // Now, check values
-  const Dtype* bottom_data = this->blob_bottom_->cpu_data();
-  const Dtype* top_data = this->blob_top_->cpu_data();
   for (int i = 0; i < this->blob_bottom_->count(); ++i) {
-    EXPECT_GE(top_data[i], 0.);
-    EXPECT_TRUE(top_data[i] == 0 || top_data[i] == bottom_data[i]);
+    Dtype bottom_value = this->blob_bottom_->cpu_data()[i];
+    EXPECT_EQ(bottom_value, this->blob_top_a_->cpu_data()[i]);
+    EXPECT_EQ(bottom_value, this->blob_top_b_->cpu_data()[i]);
   }
 }
 
-
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLUGradient) {
+TYPED_TEST(MKLDNNSplitLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
-  MKLDNNReLULayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701, 0., 0.01);
-  checker.CheckGradientEltwise(&layer, this->blob_bottom_vec_,
-      this->blob_top_vec_);
-}
-  
-TYPED_TEST(MKLDNNNeuronLayerTest, TestReLUGradientWithNegativeSlope) {
-  typedef typename TypeParam::Dtype Dtype;
-  LayerParameter layer_param;
-  CHECK(google::protobuf::TextFormat::ParseFromString(
-      "relu_param { negative_slope: 0.01 }", &layer_param));
-  MKLDNNReLULayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701, 0., 0.01);
+  MKLDNNSplitLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-2);
   checker.CheckGradientEltwise(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
 }
 
-}  // namespace caffe
-#endif  // #ifdef MKLDNN_SUPPORTED
+}
+#endif  // #if defined(MKLDNN_SUPPORTED)

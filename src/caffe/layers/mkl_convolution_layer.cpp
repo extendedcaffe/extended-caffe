@@ -87,6 +87,11 @@ MKLConvolutionLayer<Dtype>::MKLConvolutionLayer(
           layer_name = param.name();
           reinit_times = 0;
           // LOG(ERROR) << layer_name << " MKL";
+          PERFORMANCE_EVENT_ID_RESET(perf_id_fw_);
+          PERFORMANCE_EVENT_ID_RESET(perf_id_bw_);
+          PERFORMANCE_EVENT_ID_RESET(perf_id_bw_prop_);
+          PERFORMANCE_EVENT_ID_RESET(perf_id_bw_diff_);
+          PERFORMANCE_EVENT_ID_RESET(perf_id_bw_bias_);
         }
 
 template <typename Dtype>
@@ -636,7 +641,7 @@ void MKLConvolutionLayer<Dtype>::Backward_cpu(
               bottom[0]->mutable_cpu_diff();
     }
     PERFORMANCE_EVENT_ID_INIT(perf_id_bw_prop_,
-    PERFORMANCE_MKL_NAME_DETAILED("BW", "_prop"));
+        PERFORMANCE_MKL_NAME_DETAILED("BW", "_prop"));
     PERFORMANCE_MEASUREMENT_BEGIN();
     status = dnnExecute<Dtype>(convolutionBwdData, res_convolutionBwdData);
     PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_prop_);
@@ -717,10 +722,12 @@ void MKLConvolutionLayer<Dtype>::Backward_cpu(
         }
       }
 
+      PERFORMANCE_EVENT_ID_INIT(perf_id_bw_diff_,
+          PERFORMANCE_MKL_NAME_DETAILED("BW", "_diff"));
       PERFORMANCE_MEASUREMENT_BEGIN();
       status = dnnExecute<Dtype>(bwdf2fwd_filter_diff->convert_from_int,
               convert_resources);
-      PERFORMANCE_MEASUREMENT_END_MKL_DETAILED("BW", "_diff");
+      PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_diff_);
 
       CHECK_EQ(status, 0) << "Conversion failed with status " << status;
     }

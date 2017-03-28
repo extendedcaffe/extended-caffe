@@ -254,7 +254,7 @@ void MKLEltwiseLayer<Dtype>::Forward_cpu(
       PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
     }
     CHECK_EQ(e, E_SUCCESS);
-    }
+  }
     break;
   case EltwiseParameter_EltwiseOp_PROD:
   case EltwiseParameter_EltwiseOp_MAX:

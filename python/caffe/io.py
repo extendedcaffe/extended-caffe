@@ -34,6 +34,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+"""
+Use AGG matplotlib backend, so no X11 display is needed.
+skimage.io imports matplotlib.pyplot so backend needs to be set before.
+"""
+import matplotlib
+matplotlib.use('AGG')
 import numpy as np
 import skimage.io
 from scipy.ndimage import zoom
@@ -352,7 +358,7 @@ def flip_image(im, scale=128, is_flow=False):
     """
     im = im[:, ::-1, :]  # flip for mirrors
     if is_flow:  #if using a flow input, should flip first channel which corresponds to x-flow
-      im[:,:,0] = scale-im[:,:,0]
+        im[:,:,0] = scale-im[:,:,0]
     return im
 
 def resize_image(im, new_dims, interp_order=1):

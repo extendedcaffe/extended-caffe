@@ -144,7 +144,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   if (filtered_param.engine() == "")
     filtered_param.set_engine("MKLDNN");
 #endif
-
+  engine_name_ = filtered_param.engine();
   // Create a copy of filtered_param with splits added where necessary.
   NetParameter param_with_splits;
 
@@ -681,27 +681,13 @@ void Net<Dtype>::CompilationRuleOne(const NetParameter& param,
         layer_param->mutable_batch_norm_param()->set_use_weight_bias(true);
         layer_param->mutable_batch_norm_param()->set_bias_term(scale_bias_term);
 
-        // merge scale layer params to BN layer
-        int base_size = layer_param->param_size();
-        if (consumer_layer_param.param_size() > 0 && base_size != 3) {
-           LOG(FATAL) << "For BatchNorm layer followed by Scale layer, you should specify 3 params in BN layer proto";
+        // merge scale blobs to BN layer if have
+        if (consumer_layer_param.blobs_size() == 2) {
+          // LOG(ERROR) << "BN blob size: " << layer_param->blobs_size();
+          CHECK_EQ(layer_param->blobs_size(), 3) << "BN blobs must be 3 if need concat scale blobs to it.";
+          layer_param->add_blobs()->CopyFrom(consumer_layer_param.blobs(0));
+          layer_param->add_blobs()->CopyFrom(consumer_layer_param.blobs(1));
         }
-
-        // LOG(ERROR) << "BN param size: " << base_size << " Scale param size: " << consumer_layer_param.param_size();
-        for (int i = 0; i < consumer_layer_param.param_size(); i++) {
-            layer_param->add_param();
-        }
-
-        for (int i = 0; i < consumer_layer_param.param_size(); i++) {
-            ParamSpec* param_spec = layer_param->mutable_param(base_size + i);
-
-            param_spec->set_lr_mult(consumer_layer_param.param(i).lr_mult());
-            param_spec->set_decay_mult(consumer_layer_param.param(i).decay_mult());
-        }
-        // LOG(ERROR) << "layer_param size: " << layer_param->param_size();
-        // LOG(ERROR) << "param lr: " << layer_param->param(4).lr_mult();
-      } else {
-          LOG(ERROR) << layer_param->name() << " has no Scale layer followed it";
       }
     }
 
@@ -734,14 +720,21 @@ void Net<Dtype>::CompilationRuleTwo(const NetParameter& param,
     // and input bottom comes from  Convolution of engine MKLDNN
     // then we can remove ReLU layer
     // and rename Convolution top blob after deleted ReLU's top
+    // Note: Currently merging of convolution and relu layers is feasible
+    // only for caffe::TEST phase, as there is no Backward primitive of conv Relu
 
     // If current layer is Convolution of MKLDNN engine..
-    if ((layer_param->type().compare("Convolution") == 0) &&
+    if ((param.state().phase() == TEST) && 
+        (layer_param->type().compare("Convolution") == 0) &&
        ((layer_param->convolution_param().engine() ==
          ConvolutionParameter_Engine_MKLDNN)
-       || ((layer_param->convolution_param().engine() ==
+       || (((layer_param->convolution_param().engine() ==
            ConvolutionParameter_Engine_DEFAULT) &&
-            param.engine().compare("MKLDNN") == 0))) {
+            ((param.engine().compare(0, 6, "MKLDNN") == 0)
+            && (param.engine().find(":DLA", 6) == string::npos))) ||
+            (((param.engine() == "") &&
+              (layer_param->engine().compare(0, 6, "MKLDNN") == 0) &&
+              (layer_param->engine().find(":DLA", 6) == string::npos)))))) {
       std::vector<const LayerParameter*> consumer_layer_params;
       GetBlobConsumers(consumer_layer_params, layer_param->top(0),
                        param, i+1 < param.layer_size() ? i+1 : i);
@@ -754,9 +747,13 @@ void Net<Dtype>::CompilationRuleTwo(const NetParameter& param,
       if ((consumer_layer_param.type().compare("ReLU") == 0) &&
         ((consumer_layer_param.relu_param().engine() ==
           ReLUParameter_Engine_MKLDNN)
-        || ((consumer_layer_param.relu_param().engine() ==
+        || (((consumer_layer_param.relu_param().engine() ==
             ReLUParameter_Engine_DEFAULT) &&
-             param.engine().compare("MKLDNN") == 0))) {
+            (((param.engine().compare(0, 6, "MKLDNN") == 0)
+            && (param.engine().find(":DLA", 6) == string::npos)))) ||
+            ((param.engine() == "" &&
+              layer_param->engine().compare(0, 6, "MKLDNN") == 0 &&
+              layer_param->engine().find(":DLA", 6) == string::npos))))) {
         string& convolution_top_blob_name =
             const_cast<string&>(layer_param->top(0));
         const string& scale_top_blob_name = consumer_layer_param.top(0);
@@ -842,7 +839,7 @@ void Net<Dtype>::CompilationRuleThree(const NetParameter& param,
       batch_norm_top.append("_x");
     }
 
-#if 1
+#if 0
     // If current layer is ReLU of MKL2017 engine..
     if (((layer_param->type().compare("ReLU") == 0) &&
         ((layer_param->relu_param().engine() ==
@@ -1425,7 +1422,12 @@ void Net<Dtype>::Reshape() {
 }
 
 template <typename Dtype>
-void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
+void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param_inp) {
+  NetParameter param_tmp = param_inp;
+  param_tmp.set_engine(engine_name_);
+  NetParameter param;
+  CompileNet(param_tmp, &param);
+
   int num_source_layers = param.layer_size();
   for (int i = 0; i < num_source_layers; ++i) {
     const LayerParameter& source_layer = param.layer(i);
@@ -1439,43 +1441,9 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
       LOG(INFO) << "Ignoring source layer " << source_layer_name;
       continue;
     }
-    // LOG(ERROR) << "Copying source layer " << source_layer_name << " to " << layer_names_[target_layer_id];
-    // LOG(ERROR) << "Source layer type: " << source_layer.type() << ", Source layer engine: " << source_layer.batch_norm_param().engine() << ", Solution engine: " << param.engine();
-    vector<shared_ptr<Blob<Dtype> > >& target_blobs = layers_[target_layer_id]->blobs();
-
-#if 1
-    const LayerParameter& target_layer = layers_[target_layer_id]->layer_param();
-    if ((source_layer.type().compare("BatchNorm") == 0) && (target_layer.engine().compare("MKL2017") == 0)) {
-      std::vector<const LayerParameter*> consumer_layer_params;
-      GetBlobConsumers(consumer_layer_params,
-                       source_layer.top(0),
-                       param,
-                       i + 1 < param.layer_size() ? i + 1 : i);
-      const LayerParameter& consumer_layer =
-                                    consumer_layer_params.size() > 0 ?
-                                    *(consumer_layer_params[0]) : source_layer;
-
-      // mean, variance and aggregation weight to 0 ~ 2
-      for (int j = 0; j < source_layer.blobs_size(); j++) {
-          target_blobs[j]->FromProto(source_layer.blobs(j), false);
-      }
-
-      // LOG(ERROR) << "source layer type: " << source_layer.type() << " , consumer layer type: " << consumer_layer.type() << ", engine: " << target_layer.engine();
-      // Consumer layer of blob produced by BN
-      // has to be Scale layer with one Input Blob, merge Scale blobs into BN blobs
-      if ((consumer_layer.type().compare("Scale") == 0) &&
-          (consumer_layer.bottom_size() == 1) && (target_layer.engine().compare("MKL2017") == 0) ) {
-             CHECK_EQ(target_blobs.size(), source_layer.blobs_size() + consumer_layer.blobs_size())
-                      << "Incompatible number of blobs for layer " << source_layer_name;
-             for (int j = 0; j < consumer_layer.blobs_size(); ++j) {
-               const bool kReshape = false;
-               target_blobs[j + 3]->FromProto(consumer_layer.blobs(j), kReshape);
-             }
-      }
-      continue;
-    }
-#endif
-
+    DLOG(INFO) << "Copying source layer " << source_layer_name;
+    vector<shared_ptr<Blob<Dtype> > >& target_blobs =
+        layers_[target_layer_id]->blobs();
     CHECK_EQ(target_blobs.size(), source_layer.blobs_size())
         << "Incompatible number of blobs for layer " << source_layer_name;
     for (int j = 0; j < target_blobs.size(); ++j) {

@@ -2616,6 +2616,124 @@ TYPED_TEST(NetTestCPU, TestForwardReshapeForward) {
     input_blob->Reshape(1, 3, 1280, 720);
     this->net_->Forward();
 }
+TYPED_TEST(NetTest, TestConvolutionForwardReshape) {
+  typedef typename TypeParam::Dtype Dtype;
+  // We set up bottom blobs of two different sizes, switch between
+  // them, check that forward and backward both run and the results
+  // are the same, and check that the output shapes change.
+  Caffe::set_random_seed(this->seed_);
+  Caffe::set_mode(Caffe::CPU);
+  FillerParameter filler_param;
+  filler_param.set_std(1);
+  GaussianFiller<Dtype> filler(filler_param);
+  // Check smaller shape first as larger first could hide realloc failures.
+  Blob<Dtype> blob1(2, 3, 12, 10);
+  Blob<Dtype> blob2(4, 3, 9, 11);
+  ASSERT_LT(blob1.count(), blob2.count());
+  filler.Fill(&blob1);
+  filler.Fill(&blob2);
+  const string& proto =
+      "name: 'TestNetwork' "
+      " layer {"
+      "   top: 'data'"
+      "   top: 'label'"
+      "   name: 'data'"
+      "   type: 'DummyData'"
+      "   dummy_data_param {"
+      "     shape: { dim: 2 dim: 3 dim: 12 dim: 10 }"
+      "     data_filler {"
+      "       type: 'constant'"
+      "       value: 0.01"
+      "     }"
+      "   }"
+      "   transform_param {"
+      "     mirror: true"
+      "     crop_size: 224"
+      "     mean_value: 104"
+      "     mean_value: 117"
+      "     mean_value: 123"
+      "   }"
+      " }"
+      " layer {"
+      "  bottom: 'data'"
+      "   top: 'conv'"
+      "   name: 'conv1'"
+      "   type: 'Convolution'"
+      "   param {"
+      "     lr_mult: 1"
+      "     decay_mult: 1"
+      "   }"
+      "   convolution_param {"
+      "     "
+      "     num_output: 64"
+      "     engine: MKL2017 "
+      "     pad: 3"
+      "     kernel_size: 7"
+      "     stride: 2"
+      "     weight_filler {"
+      "       type: 'xavier'"
+      "     }"
+      "     bias_term: false"
+      "   }"
+      " }";
+    this->InitNetFromProtoString(proto);
+  shared_ptr<Blob<Dtype> > input_blob = this->net_->blob_by_name("data");
+  Blob<Dtype>* output_blob = this->net_->output_blobs()[0];
+  input_blob->Reshape(blob1.num(), blob1.channels(), blob1.height(),
+      blob1.width());
+  this->net_->Reshape();
+  caffe_copy(blob1.count(), blob1.cpu_data(), input_blob->mutable_cpu_data());
+  this->net_->Forward();
+  // call backward just to make sure it runs
+  this->net_->Backward();
+  Blob<Dtype> output1(output_blob->num(), output_blob->channels(),
+      output_blob->height(), output_blob->width());
+  caffe_copy(output1.count(), output_blob->cpu_data(),
+      output1.mutable_cpu_data());
+
+  input_blob->Reshape(blob2.num(), blob2.channels(), blob2.height(),
+      blob2.width());
+  this->net_->Reshape();
+  caffe_copy(blob2.count(), blob2.cpu_data(), input_blob->mutable_cpu_data());
+  this->net_->Forward();
+  this->net_->Backward();
+  Blob<Dtype> output2(output_blob->num(), output_blob->channels(),
+      output_blob->height(), output_blob->width());
+  caffe_copy(output2.count(), output_blob->cpu_data(),
+      output2.mutable_cpu_data());
+
+  input_blob->Reshape(blob1.num(), blob1.channels(), blob1.height(),
+      blob1.width());
+  this->net_->Reshape();
+  caffe_copy(blob1.count(), blob1.cpu_data(), input_blob->mutable_cpu_data());
+  this->net_->Forward();
+  this->net_->Backward();
+  for (int i = 0; i < output1.count(); ++i) {
+    EXPECT_FLOAT_EQ(*(output1.cpu_data() + i), *(output_blob->cpu_data() + i));
+  }
+
+  input_blob->Reshape(blob2.num(), blob2.channels(), blob2.height(),
+      blob2.width());
+  this->net_->Reshape();
+  caffe_copy(blob2.count(), blob2.cpu_data(), input_blob->mutable_cpu_data());
+  this->net_->Forward();
+  this->net_->Backward();
+  for (int i = 0; i < output2.count(); ++i) {
+    EXPECT_FLOAT_EQ(*(output2.cpu_data() + i), *(output_blob->cpu_data() + i));
+  }
+
+  EXPECT_EQ(output1.num(), blob1.num());
+  EXPECT_EQ(output2.num(), blob2.num());
+  bool same_spatial_shape = true;
+  const int kFirstSpatialAxis = 2;
+  for (int i = kFirstSpatialAxis; i < output1.num_axes(); ++i) {
+    if (output1.shape(i) != output2.shape(i)) {
+      same_spatial_shape = false;
+      break;
+    }
+  }
+  EXPECT_FALSE(same_spatial_shape);
+}
 #endif
 
 
@@ -2801,7 +2919,7 @@ class CompileNetTest : public ::testing::Test {
 // If BatchNorm of engine MKL2017
 // produce blob consumed by
 // Scale Layer then Scale Layer can be dropped
-TEST_F(CompileNetTest, TestCompileNet) {
+TEST_F(CompileNetTest, TestCompileNetBatchNorm) {
   const string& input_proto =
       "name: 'TestNetwork' "
       "layer { "
@@ -2861,6 +2979,348 @@ TEST_F(CompileNetTest, TestCompileNet) {
       "} ";
   this->RunCompilerNetTest(input_proto, output_proto);
 }
+
+// Combined BatchNorm (inPlace) followed by scale Layer and InPlace Relu
+TEST_F(CompileNetTest, TestCompileNetBatchNormInPlace) {
+  const string& input_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'bn' "
+      "  top: 'data' "
+      "  type: 'BatchNorm' "
+      "  batch_norm_param { "
+      "   engine: MKL2017 "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'data' "
+      " top: 'data' "
+      " name: 'sc' "
+      " type: 'Scale' "
+      " scale_param { "
+      "   bias_term: true "
+      " }"
+      "}"
+      "layer { "
+      " bottom: 'data' "
+      " top: 'data' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      " relu_param { "
+      "  engine: MKL2017 "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'data' "
+      "  bottom: 'label' "
+      "} ";
+
+  const string& output_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'bn' "
+      "  top: 'data_x' "
+      "  type: 'BatchNorm' "
+      "  batch_norm_param { "
+      "   engine: MKL2017 "
+      "   bias_term: true "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'data_x' "
+      " top: 'data_x' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      " relu_param { "
+      "  engine: MKL2017 "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'data_x' "
+      "  bottom: 'label' "
+      "} ";
+  this->RunCompilerNetTest(input_proto, output_proto);
+}
+#endif
+
+#if defined(MKL2017_SUPPORTED) && defined(MKLDNN_SUPPORTED)
+// Combined Batch Norm and Conv ReLU
+TEST_F(CompileNetTest, TestCompileNetBatchNormConvolution) {
+  const string& input_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'bn' "
+      "  top: 'bn' "
+      "  type: 'BatchNorm' "
+      "  batch_norm_param { "
+      "   engine: MKL2017 "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'bn' "
+      " top: 'conv' "
+      " name: 'sc' "
+      " type: 'Scale' "
+      " scale_param { "
+      "   bias_term: true "
+      " }"
+      "}"
+      "layer { "
+      "  bottom: 'conv' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  convolution_param { "
+      "   engine: MKLDNN "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'relu' "
+      " top: 'relu' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      " relu_param { "
+      "  engine: MKLDNN "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+
+  const string& output_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'bn' "
+      "  top: 'conv' "
+      "  type: 'BatchNorm' "
+      "  batch_norm_param { "
+      "   engine: MKL2017 "
+      "   bias_term: true "
+      "  } "
+      "} "
+      "layer { "
+      "  bottom: 'conv' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  convolution_param { "
+      "   engine: MKLDNN "
+      "   relu: true "
+      "negative_slope: 0"
+      "  } "
+      "} "
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+  this->RunCompilerNetTest(input_proto, output_proto);
+}
+#endif
+
+#ifdef MKLDNN_SUPPORTED
+// If Convolution of engine MKLDNN
+// is followed by ReLU of engine MKLDNN
+TEST_F(CompileNetTest, TestCompileNetConvolution) {
+  const string& input_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  convolution_param { "
+      "   engine: MKLDNN "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'relu' "
+      " top: 'relu' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      " relu_param { "
+      "  engine: MKLDNN "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+
+  const string& output_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  convolution_param { "
+      "   engine: MKLDNN "
+      "   relu: true "
+      "negative_slope: 0"
+      "  } "
+      "} "
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+  this->RunCompilerNetTest(input_proto, output_proto);
+}
+
+TEST_F(CompileNetTest, TestCompileNetLayerParamEngineConvolution) {
+  const string& input_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  engine: 'MKLDNN:CPU' "
+      "  convolution_param { "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'relu' "
+      " top: 'relu' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      " engine: 'MKLDNN:CPU' "
+      " relu_param { "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+
+  const string& output_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  engine: 'MKLDNN:CPU' "
+      "  convolution_param { "
+      "   relu: true "
+      "negative_slope: 0"
+      "  } "
+      "} "
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+  this->RunCompilerNetTest(input_proto, output_proto);
+}
+// If Convolution of engine MKLDNN
+// is followed by ReLU of engine MKLDNN
+// , but major subengine is MKLDNN::DLA then there 
+// no merging ov Convolution and Relu
+TEST_F(CompileNetTest, TestNoCompileNetLayerParamEngineConvolution) {
+  const string& input_proto =
+      "name: 'TestNetwork' "
+      "layer { "
+      "  name: 'data' "
+      "  type: 'Data' "
+      "  top: 'data' "
+      "  top: 'label' "
+      "} "
+      "layer { "
+      "  bottom: 'data' "
+      "  name: 'conv' "
+      "  top: 'relu' "
+      "  type: 'Convolution' "
+      "  engine: 'MKLDNN:DLA,CPU' "
+      "  convolution_param { "
+      "  } "
+      "} "
+      "layer { "
+      " bottom: 'relu' "
+      " top: 'relu' "
+      " name: 'relu' "
+      " type: 'ReLU' "
+      "  engine: 'MKLDNN:DLA,CPU' "
+      " relu_param { "
+      " } "
+      "}"
+      "layer { "
+      "  name: 'loss' "
+      "  type: 'SoftmaxWithLoss' "
+      "  bottom: 'relu' "
+      "  bottom: 'label' "
+      "} ";
+
+  this->RunCompilerNetTest(input_proto, input_proto);
+}
+
 #endif
 
 // If There is BatchNorm followed by Scale layer, but BatchNorm
