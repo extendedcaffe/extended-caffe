@@ -103,6 +103,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   CHECK(Caffe::root_solver() || root_net_)
       << "root_net_ needs to be set for all non-root solvers";
 
+  CHECK_GE(sizeof(size_t), 8) << "We need 64-bit environment to support 3D convolution, pls you are not using 3D, you can comment me.";
+  CHECK_GE(sizeof(long), 8) << "We need 64-bit environment to support 3D convolution, pls you are not using 3D, you can comment me.";
+
   static int has_intel_knl_feature = -1;
   if (has_intel_knl_feature < 0) {
     has_intel_knl_feature = caffe::cpu::has_intel_knl_features();
