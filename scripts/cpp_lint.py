@@ -1595,10 +1595,10 @@ def CheckCaffeAlternatives(filename, clean_lines, linenum, error):
 def CheckCaffeDataLayerSetUp(filename, clean_lines, linenum, error):
   """Except the base classes, Caffe DataLayer should define DataLayerSetUp
      instead of LayerSetUp.
-     
+
   The base DataLayers define common SetUp steps, the subclasses should
   not override them.
-  
+
   Args:
     filename: The name of the current file.
     clean_lines: A CleansedLines instance containing the file.

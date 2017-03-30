@@ -64,6 +64,8 @@ class MKLConvolutionLayer : public ConvolutionLayer<Dtype> {
 
   virtual ~MKLConvolutionLayer();
 
+  virtual inline const char* type() const { return "MklConvolution"; }
+
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                            const vector<Blob<Dtype>*>& top);
@@ -135,7 +137,6 @@ class MKLConvolutionLayer : public ConvolutionLayer<Dtype> {
          pad_h_;
 
   bool bprop_unpack_called;
-  int reinit_times;
 
   PERFORMANCE_EVENT_ID_DECL(perf_id_fw_);
   PERFORMANCE_EVENT_ID_DECL(perf_id_bw_);

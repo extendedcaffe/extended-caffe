@@ -134,8 +134,6 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   NetParameter filtered_param;
   FilterNet(in_param, &filtered_param);
 
-  bool no_default_layer_engine = (filtered_param.engine() == "");
-
   // Backward compatibility for obsolete compile-time flags
 #ifdef USE_MKL2017_AS_DEFAULT_ENGINE
   if (filtered_param.engine() == "") {
@@ -203,34 +201,15 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     if (param.engine() != "" && layer_param.engine() == "") {
         param.mutable_layer(layer_id)->set_engine(param.engine());
     }
+
 #ifdef CPU_ONLY
-    if (no_default_layer_engine) {
-          // LOG(ERROR) << "Handle some special cases for RFCN";
-	  if (
-          // !layer_param.name().compare("conv1") ||
-          // !layer_param.name().compare("rpn_cls_score") ||
-          // !layer_param.name().compare("rpn_bbox_pred") ||
-          !layer_param.name().compare("rfcn_cls") ||
-          // !layer_param.name().compare("res4a_branch1") ||
-          // !layer_param.name().compare("res4a_branch2a") ||
-          // !layer_param.name().compare("res3a_branch1") ||
-          // !layer_param.name().compare("res3a_branch2a") ||
-          // !layer_param.name().compare("rpn_bbox_pred")
-          (layer_param.type().compare("BatchNorm") &&
-          layer_param.type().compare("ReLU") &&
-          (layer_param.type().compare("Concat") || has_intel_knl_feature == 1) &&
-          layer_param.type().compare("Convolution") &&
-          layer_param.type().compare("LRN") &&
-          layer_param.type().compare("Eltwise") &&
-          layer_param.type().compare("Pooling") &&
-          layer_param.type().compare("Split"))
-          ) {
-              // LOG(ERROR) << layer_param.name() << " use CAFFE Engine";
-              param.mutable_layer(layer_id)->set_engine("CAFFE");
-          } else {
-              param.mutable_layer(layer_id)->set_engine("MKL2017");
-          }
-	}
+    // special handling for some layers
+    if (!layer_param.name().compare("rfcn_cls") ||
+        (!layer_param.type().compare("Concat") && has_intel_knl_feature)
+       ) {
+           // LOG(ERROR) << layer_param.name() << " use CAFFE Engine";
+           param.mutable_layer(layer_id)->set_engine("CAFFE");
+      }
 #endif
 
     if (layer_param.propagate_down_size() > 0) {

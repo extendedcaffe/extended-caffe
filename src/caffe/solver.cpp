@@ -177,6 +177,8 @@ void Solver<Dtype>::InitTrainNet() {
   } else {
     net_.reset(new Net<Dtype>(net_param, root_solver_->net_.get()));
   }
+  
+  // net_.set_time_info(param_.time_info());
 }
 
 template <typename Dtype>
@@ -262,7 +264,7 @@ void Solver<Dtype>::InitTestNets() {
           root_solver_->test_nets_[i].get()));
     }
     test_nets_[i]->set_debug_info(param_.debug_info());
-	test_nets_[i]->set_time_info(param_.time_info());
+    test_nets_[i]->set_time_info(param_.time_info());
   }
 }
 
@@ -272,7 +274,7 @@ Dtype Solver<Dtype>::ForwardBackward() {
   net_->ClearParamDiffs();
 
   Dtype loss = Dtype(0);
-  // vector<Blob<Dtype>*> bottom_vec;
+  vector<Blob<Dtype>*> bottom_vec;
 
   // accumulate the loss and gradient
   for (int i = 0; i < param_.iter_size(); ++i) {

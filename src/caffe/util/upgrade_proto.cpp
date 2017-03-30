@@ -1,6 +1,45 @@
+/*
+All modification made by Intel Corporation: © 2016 Intel Corporation
+
+All contributions by the University of California:
+Copyright (c) 2014, 2015, The Regents of the University of California (Regents)
+All rights reserved.
+
+All other contributions:
+Copyright (c) 2014, 2015, the respective contributors
+All rights reserved.
+For the list of contributors go to https://github.com/BVLC/caffe/blob/master/CONTRIBUTORS.md
+
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/text_format.h>
+
+#include <boost/algorithm/string/replace.hpp>
 
 #include <map>
 #include <string>
@@ -9,6 +48,10 @@
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/io.hpp"
 #include "caffe/util/upgrade_proto.hpp"
+
+#ifdef USE_MLSL
+#include "mlsl.h"
+#endif /* USE_MLSL */
 
 namespace caffe {
 
@@ -87,6 +130,9 @@ void ReadNetParamsFromTextFileOrDie(const string& param_file,
                                     NetParameter* param) {
   CHECK(ReadProtoFromTextFile(param_file, param))
       << "Failed to parse NetParameter file: " << param_file;
+#ifdef USE_MLSL
+  ReplaceMultinodeNetParams(param);
+#endif
   UpgradeNetAsNeeded(param_file, param);
 }
 
@@ -1098,5 +1144,55 @@ void ReadSolverParamsFromTextFileOrDie(const string& param_file,
       << "Failed to parse SolverParameter file: " << param_file;
   UpgradeSolverAsNeeded(param_file, param);
 }
+
+#ifdef USE_MLSL
+static std::string getNodeId() {
+  return std::to_string(MLSL::GetNodeId());
+}
+
+static std::string getNumNodes() {
+  return std::to_string(MLSL::GetNumNodes());
+}
+
+void ReplaceMultinodeSolverParams(SolverParameter* param) {
+  std::string node_id = getNodeId();
+  std::string num_nodes = getNumNodes();
+
+  if (param->has_train_net()) {
+    std::string* train_net = param->mutable_train_net();
+    if (train_net) {
+        boost::replace_all(*train_net, "%#", node_id);
+        boost::replace_all(*train_net, "%*", num_nodes);
+    }
+  }
+
+  if (param->has_snapshot_prefix()) {
+    std::string* prefix = param->mutable_snapshot_prefix();
+    if (prefix) {
+        boost::replace_all(*prefix, "%#", node_id);
+        boost::replace_all(*prefix, "%*", num_nodes);
+    }
+  }
+}
+
+void ReplaceMultinodeNetParams(NetParameter* param) {
+  for (int i = 0; i < param->layer_size(); ++i) {
+    std::string* source = nullptr;
+
+    if (param->layer(i).has_data_param()) {
+      source = param->mutable_layer(i)->mutable_data_param()->
+              mutable_source();
+    } else if (param->layer(i).has_image_data_param()) {
+      source = param->mutable_layer(i)->mutable_image_data_param()->
+              mutable_source();
+    }
+
+    if (source) {
+        boost::replace_all(*source, "%#", getNodeId());
+        boost::replace_all(*source, "%*", getNumNodes());
+    }
+  }
+}
+#endif
 
 }  // namespace caffe

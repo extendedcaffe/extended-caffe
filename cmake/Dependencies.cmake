@@ -2,7 +2,7 @@
 set(Caffe_LINKER_LIBS "")
 
 # ---[ Boost
-find_package(Boost 1.46 REQUIRED COMPONENTS system thread filesystem)
+find_package(Boost 1.46 REQUIRED COMPONENTS system thread filesystem regex)
 include_directories(SYSTEM ${Boost_INCLUDE_DIR})
 list(APPEND Caffe_LINKER_LIBS ${Boost_LIBRARIES})
 
@@ -18,6 +18,11 @@ if(USE_OPENMP)
   else()
     set(USE_OPENMP "OFF")   # compiler is not supporting OpenMP then do not use it
   endif()
+endif()
+
+# ---[ PERFORMANCE_MONITORING
+if(PERFORMANCE_MONITORING)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPERFORMANCE_MONITORING")
 endif()
 
 # ---[ Google-glog
@@ -36,7 +41,7 @@ include(cmake/ProtoBuf.cmake)
 # ---[ HDF5
 find_package(HDF5 COMPONENTS HL REQUIRED)
 include_directories(SYSTEM ${HDF5_INCLUDE_DIRS} ${HDF5_HL_INCLUDE_DIR})
-list(APPEND Caffe_LINKER_LIBS ${HDF5_LIBRARIES})
+list(APPEND Caffe_LINKER_LIBS ${HDF5_LIBRARIES} ${HDF5_HL_LIBRARIES})
 
 # ---[ LMDB
 if(USE_LMDB)
@@ -79,7 +84,7 @@ endif()
 
 # ---[ OpenCV
 if(USE_OPENCV)
-  find_package(OpenCV QUIET COMPONENTS core highgui imgproc imgcodecs)
+  find_package(OpenCV QUIET COMPONENTS core highgui imgproc imgcodecs videoio)
   if(NOT OpenCV_FOUND) # if not OpenCV 3.x, then imgcodecs are not found
     find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc)
   endif()
@@ -89,29 +94,21 @@ if(USE_OPENCV)
   add_definitions(-DUSE_OPENCV)
 endif()
 
-# ---[ MPI
-if(USE_MPI)
+# ---[ MLSL
+if(USE_MLSL)
+  set(MLSL_ROOT "$ENV{MLSL_ROOT}")
+  if(NOT MLSL_ROOT)
+    message(FATAL_ERROR "Unable to find MLSL package installation directory!")
+  endif()
+  message(STATUS "Machine Learning Scaling Library (MLSL) found (${MLSL_ROOT}/intel64)")
   find_package(MPI REQUIRED)
-  if (MPI_CXX_FOUND)
-    add_definitions("-DUSE_MPI=1")
+  if (MPI_CXX_INCLUDE_PATH)
+    include_directories(SYSTEM ${MPI_CXX_INCLUDE_PATH})
   endif()
-  if(MPI_CXX_COMPILER)
-    if (NOT ${MPI_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER})
-      message(FATAL_ERROR "Currently cxx compiler is: \"${CMAKE_CXX_COMPILER}\""
-                          " The mpi compiler should be use (${MPI_CXX_COMPILER})"
-                          " Please set mpi compiler manually"
-                          " (CXX=${MPI_CXX_COMPILER})")
-    endif()
-  endif()
-  if(MPI_CXX_INCLUDE_PATH)
-    include_directories(${MPI_CXX_INCLUDE_PATH})
-  endif()
-  if(MPI_CXX_COMPILE_FLAGS)
-    add_definitions("${MPI_CXX_COMPILE_FLAGS}")
-  endif()
-  if(MPI_CXX_LINK_FLAGS)
-    list(APPEND Caffe_LINKER_LIBS ${MPI_CXX_LINK_FLAGS})
-  endif()
+  add_definitions("-DUSE_MLSL=1")
+  include_directories(SYSTEM "${MLSL_ROOT}/intel64/include")
+  link_directories(SYSTEM "${MLSL_ROOT}/intel64/lib")
+  list(APPEND Caffe_LINKER_LIBS mlsl mpi)
 endif()
 
 # ---[ BLAS
@@ -119,6 +116,7 @@ set(MKL_EXTERNAL "0")
 if(NOT APPLE)
   set(BLAS "MKL" CACHE STRING "Selected BLAS library")
   set_property(CACHE BLAS PROPERTY STRINGS "Atlas;Open;MKL")
+
   if(BLAS STREQUAL "Atlas" OR BLAS STREQUAL "atlas")
     find_package(Atlas REQUIRED)
     include_directories(SYSTEM ${Atlas_INCLUDE_DIR})
@@ -158,6 +156,12 @@ elseif(APPLE)
   find_package(vecLib REQUIRED)
   include_directories(SYSTEM ${vecLib_INCLUDE_DIR})
   list(APPEND Caffe_LINKER_LIBS ${vecLib_LINKER_LIBS})
+
+  if(VECLIB_FOUND)
+    if(NOT vecLib_INCLUDE_DIR MATCHES "^/System/Library/Frameworks/vecLib.framework.*")
+      add_definitions(-DUSE_ACCELERATE)
+    endif()
+  endif()
 endif()
 
 # ---[ MKL2017
@@ -180,23 +184,41 @@ if(BLAS STREQUAL "MKL" OR BLAS STREQUAL "mkl")
 endif()
 
 # ---[ MKLDNN
-set(MKLDNN_INCLUDE_DIR "$ENV{MKLDNNROOT}/include/")
-if(EXISTS ${MKLDNN_INCLUDE_DIR}/mkldnn.hpp)
-  message(STATUS "Found MKLDNN")
+if(DEFINED ENV{MKLDNNROOT})
+  set(MKLDNNROOT_DIR $ENV{MKLDNNROOT})
+  if(NOT ${MKLDNNROOT_DIR} STREQUAL "")
+    set(MKLDNNROOT_INCLUDE_DIR "${MKLDNNROOT_DIR}/include/")
+    if(EXISTS ${MKLDNNROOT_INCLUDE_DIR}/mkldnn.hpp)
+      message(STATUS "Found MKLDNN: ${MKLDNNROOT_DIR}")
+      set(MKLDNN_SUPPORTED ON)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMKLDNN_SUPPORTED -std=c++11")
+      if(USE_MKLDNN_AS_DEFAULT_ENGINE)
+        message(STATUS "MKLDNN engine will be used as a default engine")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_MKLDNN_AS_DEFAULT_ENGINE")
+      endif()
+      list(APPEND Caffe_LINKER_LIBS "${MKLDNNROOT_DIR}/lib/libmkldnn.so")
+	    include_directories(SYSTEM ${MKLDNNROOT_INCLUDE_DIR})
+    else()
+      message(STATUS "MKLDNN not found. MKLDNN_INCLUDE_DIR = ${MKLDNNROOT_INCLUDE_DIR}")
+      set(MKLDNN_SUPPORTED OFF)
+      if(USE_MKLDNN_AS_DEFAULT_ENGINE)
+        message(WARNING "Flag USE_MKLDNN_AS_DEFAULT_ENGINE was set, but MKLDNN not found")
+      endif()
+    endif()
+  endif()
+else()
+  Download_MKLDNN()
+
+  message(STATUS "MKLDNN will be downloaded from github and installed in ${MKLDNN_INSTALL_DIR}")
+  message(STATUS "MKLDNN include directory: ${MKLDNN_INCLUDE_DIR}")
   set(MKLDNN_SUPPORTED ON)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMKLDNN_SUPPORTED -std=c++11")
   if(USE_MKLDNN_AS_DEFAULT_ENGINE)
     message(STATUS "MKLDNN engine will be used as a default engine")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_MKLDNN_AS_DEFAULT_ENGINE")
   endif()
-  list(APPEND Caffe_LINKER_LIBS "$ENV{MKLDNNROOT}/lib/libmkldnn.so")
-	include_directories(SYSTEM ${MKLDNN_INCLUDE_DIR})
-else()
-  message(STATUS "MKLDNN not found. MKLDNN_INCLUDE_DIR = ${MKLDNN_INCLUDE_DIR}")
-  set(MKLDNN_SUPPORTED OFF)
-  if(USE_MKLDNN_AS_DEFAULT_ENGINE)
-    message(WARNING "Flag USE_MKLDNN_AS_DEFAULT_ENGINE was set, but MKLDNN not found")
-  endif()
+  list(APPEND Caffe_LINKER_LIBS "${MKLDNN_INSTALL_DIR}/lib/libmkldnn.so")
+	include_directories(${MKLDNN_INCLUDE_DIR})
 endif()
 
 # ---[ Python

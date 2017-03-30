@@ -88,6 +88,7 @@ class SmoothL1LossLayer : public LossLayer<Dtype> {
   }
 
  protected:
+  /// @copydoc SmoothL1LossLayer
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,

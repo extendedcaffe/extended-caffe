@@ -68,6 +68,7 @@ const int kProtoReadBytesLimit = INT_MAX;  // Max size of 2 GB minus 1 byte.
 
 namespace caffe {
 
+using namespace boost::property_tree;  // NOLINT(build/namespaces)
 using google::protobuf::io::FileInputStream;
 using google::protobuf::io::FileOutputStream;
 using google::protobuf::io::ZeroCopyInputStream;
@@ -150,7 +151,7 @@ cv::Mat ReadImageToCVMat(const string& filename) {
 // Do the file extension and encoding match?
 static bool matchExt(const std::string & fn,
                      std::string en) {
-  size_t p = fn.rfind('.');
+  size_t p = fn.rfind('.') + 1;
   std::string ext = p != fn.npos ? fn.substr(p) : fn;
   std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
   std::transform(en.begin(), en.end(), en.begin(), ::tolower);
@@ -164,27 +165,76 @@ static bool matchExt(const std::string & fn,
 bool ReadImageToDatum(const string& filename, const int label,
     const int height, const int width, const bool is_color,
     const std::string & encoding, Datum* datum) {
-  cv::Mat cv_img = ReadImageToCVMat(filename, height, width, is_color);
-  if (cv_img.data) {
-    if (encoding.size()) {
-      if ( (cv_img.channels() == 3) == is_color && !height && !width &&
-          matchExt(filename, encoding) )
-        return ReadFileToDatum(filename, label, datum);
-      std::vector<uchar> buf;
-      cv::imencode("."+encoding, cv_img, buf);
-      datum->set_data(std::string(reinterpret_cast<char*>(&buf[0]),
-                      buf.size()));
+  if (!encoding.size()) {
+    cv::Mat cv_img = ReadImageToCVMat(filename, height, width, is_color);
+    if (cv_img.data) {
+      CVMatToDatum(cv_img, datum);
       datum->set_label(label);
-      datum->set_encoded(true);
       return true;
+    } else {
+      return false;
     }
-    CVMatToDatum(cv_img, datum);
-    datum->set_label(label);
-    return true;
   } else {
-    return false;
+    cv::Mat cv_img = cv::imread(filename, -1);
+    if (!cv_img.data) {
+      LOG(ERROR) << "Could not open or find file " << filename;
+      return false;
+    }
+
+    bool is_img_grayscale = cv_img.channels() == 1;
+    bool is_img_bgr = cv_img.channels() == 3;
+    bool is_img_bgra = cv_img.channels() == 4;
+
+    if ( !(is_img_grayscale || is_img_bgr || is_img_bgra) ) {
+      LOG(ERROR) << "Images with " << cv_img.channels() <<
+                    " channels unsupported: " << filename;
+      return false;
+    }
+
+    bool need_convert = is_img_bgra || (is_img_grayscale == is_color);
+    bool need_resize = height > 0 && width > 0;
+
+    if (!need_convert && !need_resize && matchExt(filename, encoding)) {
+      datum->set_channels(cv_img.channels());
+      datum->set_height(cv_img.rows);
+      datum->set_width(cv_img.cols);
+      return ReadFileToDatum(filename, label, datum);
+    }
+
+    if (need_resize)
+      cv::resize(cv_img, cv_img, cv::Size(width, height));
+
+    if (need_convert) {
+      int conv_code =
+          (is_img_grayscale && is_color) ? cv::COLOR_GRAY2BGR
+        : (is_img_bgr && !is_color)      ? cv::COLOR_BGR2GRAY
+        : (is_img_bgra && is_color)      ? cv::COLOR_BGRA2BGR
+        : (is_img_bgra && !is_color)     ? cv::COLOR_BGRA2GRAY
+        : -1;
+
+      cv::cvtColor(cv_img, cv_img, conv_code);
+    }
+
+    std::vector<uchar> buf;
+    cv::imencode("."+encoding, cv_img, buf);
+    datum->set_data(std::string(reinterpret_cast<char*>(&buf[0]),
+                    buf.size()));
+    datum->set_label(label);
+    datum->set_encoded(true);
+    return true;
   }
 }
+
+void GetImageSize(const string& filename, int* height, int* width) {
+  cv::Mat cv_img = cv::imread(filename);
+  if (!cv_img.data) {
+    LOG(ERROR) << "Could not open or find file " << filename;
+    return;
+  }
+  *height = cv_img.rows;
+  *width = cv_img.cols;
+}
+
 #endif  // USE_OPENCV
 
 bool ReadFileToDatum(const string& filename, const int label,
@@ -252,6 +302,18 @@ bool DecodeDatum(Datum* datum, bool is_color) {
   } else {
     return false;
   }
+}
+
+void EncodeCVMatToDatum(const cv::Mat& cv_img, const string& encoding,
+                        Datum* datum) {
+  std::vector<uchar> buf;
+  cv::imencode("."+encoding, cv_img, buf);
+  datum->set_data(std::string(reinterpret_cast<char*>(&buf[0]),
+                              buf.size()));
+  datum->set_channels(cv_img.channels());
+  datum->set_height(cv_img.rows);
+  datum->set_width(cv_img.cols);
+  datum->set_encoded(true);
 }
 
 void CVMatToDatum(const cv::Mat& cv_img, Datum* datum) {

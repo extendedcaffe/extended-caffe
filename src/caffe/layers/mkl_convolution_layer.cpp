@@ -85,7 +85,6 @@ MKLConvolutionLayer<Dtype>::MKLConvolutionLayer(
         bwdf_filter_diff_iter(new MKLDiff<Dtype>()),
         bwdb_bias_diff_iter(new MKLDiff<Dtype>()) {
           layer_name = param.name();
-          reinit_times = 0;
           // LOG(ERROR) << layer_name << " MKL";
           PERFORMANCE_EVENT_ID_RESET(perf_id_fw_);
           PERFORMANCE_EVENT_ID_RESET(perf_id_bw_);
@@ -407,11 +406,7 @@ void MKLConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   BaseConvolutionLayer<Dtype>::Reshape(bottom, top);
 
   if (reinitialize == true) {
-    if (reinit_times >= 1) {
-      LOG(FATAL) << "Pls use same size image input for performance seek";
-    }
     Init(bottom, top);
-    reinit_times++;
   }
 }
 

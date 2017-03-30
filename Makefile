@@ -34,6 +34,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+
 PROJECT := caffe
 CONFIG_FILE := Makefile.config
 # Explicitly check for the config file, otherwise make -k will proceed anyway.
@@ -250,7 +251,8 @@ ifneq ($(CPU_ONLY), 1)
 	LIBRARIES := cudart cublas curand
 endif
 
-LIBRARIES += glog gflags protobuf boost_system boost_filesystem m hdf5_hl hdf5
+LIBRARIES += glog gflags protobuf m hdf5_hl hdf5
+BOOST_LIBRARIES += boost_system boost_filesystem boost_regex
 
 # handle IO dependencies
 USE_LEVELDB ?= 1
@@ -479,18 +481,19 @@ ifeq ($(PERFORMANCE_MONITORING), 1)
 	CXXFLAGS += -DPERFORMANCE_MONITORING
 endif
 
-# MKLDNN configuration
-# detect support for mkl-dnn primitives
-MKLDNN_LDFLAGS=
-MKLDNN_INCLUDE ?= $(MKLDNNROOT)/include
-ifneq ("$(wildcard $(MKLDNN_INCLUDE)/mkldnn.hpp)","")
-	CXXFLAGS += -DMKLDNN_SUPPORTED
-	ifeq ($(USE_MKLDNN_AS_DEFAULT_ENGINE), 1)
-	CXXFLAGS += -DUSE_MKLDNN_AS_DEFAULT_ENGINE
-	endif
-	MKLDNN_LDFLAGS+=-lmkldnn
-	MKLDNN_LDFLAGS+=-L$(MKLDNNROOT)/lib -Wl,-rpath,$(MKLDNNROOT)/lib
+# include Makefile.mkldnn
+ifeq ($(USE_MKLDNN_AS_DEFAULT_ENGINE), 1)
+ 	CXXFLAGS += -DUSE_MKLDNN_AS_DEFAULT_ENGINE
 endif
+
+# BOOST configuration
+# detect support for custom boost version
+BOOST_LDFLAGS += $(foreach boost_lib,$(BOOST_LIBRARIES),-l$(boost_lib))
+ifneq ($(origin BOOST_ROOT), undefined)
+	INCLUDE_DIRS += $(BOOST_ROOT)
+	BOOST_LDFLAGS+=-L$(BOOST_ROOT)/stage/lib -Wl,-rpath,$(BOOST_ROOT)/stage/lib
+endif
+
 
 ifeq ($(DUMP_LAYER_IO), 1)
 CXXFLAGS += -DDUMP_LAYER_IO=1
@@ -526,7 +529,7 @@ else ifeq ($(BLAS), open)
 	LIBRARIES += openblas
 else
 	# ATLAS
-	ifeq ($(LINUX), 1)
+	ifeq ($(LINUX), 0)
 		ifeq ($(BLAS), atlas)
 			# Linux simply has cblas and atlas
 			LIBRARIES += cblas atlas
@@ -573,6 +576,7 @@ else
 endif
 LDFLAGS += $(foreach librarydir,$(LIBRARY_DIRS),-L$(librarydir)) $(PKG_CONFIG) \
 		$(foreach library,$(LIBRARIES),-l$(library)) -Wl,--as-needed
+
 PYTHON_LDFLAGS := $(LDFLAGS) $(foreach library,$(PYTHON_LIBRARIES),-l$(library))
 
 # 'superclean' target recursively* deletes all files ending with an extension
@@ -598,7 +602,7 @@ endif
 ##############################
 .PHONY: all lib test clean docs linecount lint lintclean tools examples $(DIST_ALIASES) \
 	py mat py$(PROJECT) mat$(PROJECT) proto runtest \
-	superclean supercleanlist supercleanfiles warn everything
+	superclean supercleanlist supercleanfiles warn everything mkldnn mkldnn_clean
 
 # Following section detects if compiler supports OpenMP and updated compilation/linking flags accordingly
 # if no openmp is supported in compiler then openmp compiler flags are not to be updated 
@@ -629,15 +633,6 @@ ifeq ($(USE_OPENMP), 1)
       LIBRARY_DIRS += $(INTEL_OMP_DIR)
     endif
   endif
-endif
-
-# MPI support
-ifeq ($(USE_MPI), 1)
-  COMMON_FLAGS += -DUSE_MPI
- #ifneq (,$(findstring mpi,$(CXX)))
- #  CXXFLAGS += -mt_mpi
- #  LINKFLAGS += -mt_mpi
- #endif
 endif
 
 # set_env should be at the end
@@ -695,7 +690,7 @@ py: $(PY$(PROJECT)_SO) $(PROTO_GEN_PY)
 
 $(PY$(PROJECT)_SO): $(PY$(PROJECT)_SRC) $(PY$(PROJECT)_HXX) | $(DYNAMIC_NAME)
 	@ echo CXX/LD -o $@ $<
-	$(Q)$(CXX) -shared -o $@ $(PY$(PROJECT)_SRC) \
+	$(Q)$(CXX) -std=c++11 -shared -o $@ $(PY$(PROJECT)_SRC) \
 		-o $@ $(LINKFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_SHARED_HARDENING_FLAGS) -l$(LIBRARY_NAME) $(PYTHON_LDFLAGS) \
 		-Wl,-rpath,$(ORIGIN)/../../build/lib
 
@@ -760,14 +755,14 @@ $(ALL_BUILD_DIRS): | $(BUILD_DIR_LINK)
 
 $(DYNAMIC_NAME): $(OBJS) | $(LIB_BUILD_DIR)
 	@ echo LD -o $@
-	$(Q)$(CXX) -shared -o $@ $(OBJS) $(VERSIONFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_SHARED_HARDENING_FLAGS) $(LDFLAGS)
+	$(Q)$(CXX) -shared -o $@ $(OBJS) $(VERSIONFLAGS) $(BOOST_LDFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_SHARED_HARDENING_FLAGS) $(LDFLAGS)
 	@ cd $(BUILD_DIR)/lib; rm -f $(DYNAMIC_NAME_SHORT);   ln -s $(DYNAMIC_VERSIONED_NAME_SHORT) $(DYNAMIC_NAME_SHORT)
 
 $(STATIC_NAME): $(OBJS) | $(LIB_BUILD_DIR)
 	@ echo AR -o $@
 	$(Q)ar rcs $@ $(OBJS)
 
-$(BUILD_DIR)/%.o: %.cpp | $(ALL_BUILD_DIRS)
+$(BUILD_DIR)/%.o: %.cpp | mkldnn $(ALL_BUILD_DIRS)
 	@ echo CXX $<
 	$(Q)$(CXX) $< $(CXX_HARDENING_FLAGS) $(CXXFLAGS) -c -o $@ 2> $@.$(WARNS_EXT) \
 		|| (cat $@.$(WARNS_EXT); exit 1)
@@ -792,7 +787,7 @@ $(TEST_ALL_BIN): $(TEST_MAIN_SRC) $(TEST_OBJS) $(GTEST_OBJS) \
 		| $(DYNAMIC_NAME) $(TEST_BIN_DIR)
 	@ echo CXX/LD -o $@ $<
 	$(Q)$(CXX) $(TEST_MAIN_SRC) $(TEST_OBJS) $(GTEST_OBJS) \
-		-o $@ $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) $(LDFLAGS) -l$(LIBRARY_NAME) -Wl,-rpath,$(ORIGIN)/../lib
+		-o $@ $(BOOST_LDFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) $(LDFLAGS) -l$(LIBRARY_NAME) -Wl,-rpath,$(ORIGIN)/../lib
 
 $(TEST_CU_BINS): $(TEST_BIN_DIR)/%.testbin: $(TEST_CU_BUILD_DIR)/%.o \
 	$(GTEST_OBJS) | $(DYNAMIC_NAME) $(TEST_BIN_DIR)
@@ -804,7 +799,7 @@ $(TEST_CXX_BINS): $(TEST_BIN_DIR)/%.testbin: $(TEST_CXX_BUILD_DIR)/%.o \
 	$(GTEST_OBJS) | $(DYNAMIC_NAME) $(TEST_BIN_DIR)
 	@ echo LD $<
 	$(Q)$(CXX) $(TEST_MAIN_SRC) $< $(GTEST_OBJS) \
-		-o $@ $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) $(LDFLAGS) -l$(LIBRARY_NAME) -Wl,-rpath,$(ORIGIN)/../lib
+		-o $@ $(BOOST_LDFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) $(LDFLAGS) -l$(LIBRARY_NAME) -Wl,-rpath,$(ORIGIN)/../lib
 
 # Target for extension-less symlinks to tool binaries with extension '*.bin'.
 $(TOOL_BUILD_DIR)/%: $(TOOL_BUILD_DIR)/%.bin | $(TOOL_BUILD_DIR)
@@ -813,12 +808,12 @@ $(TOOL_BUILD_DIR)/%: $(TOOL_BUILD_DIR)/%.bin | $(TOOL_BUILD_DIR)
 
 $(TOOL_BINS): %.bin : %.o | $(DYNAMIC_NAME)
 	@ echo CXX/LD -o $@
-	$(Q)$(CXX) $< -o $@ $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
+	$(Q)$(CXX) $< -o $@ $(BOOST_LDFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
 		-Wl,-rpath,$(ORIGIN)/../lib
 
 $(EXAMPLE_BINS): %.bin : %.o | $(DYNAMIC_NAME)
 	@ echo CXX/LD -o $@
-	$(Q)$(CXX) $< -o $@ $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
+	$(Q)$(CXX) $< -o $@ $(BOOST_LDFLAGS) $(LINKFLAGS) $(MKL_LDFLAGS) $(MKLDNN_LDFLAGS) $(CXX_HARDENING_FLAGS) $(LINKER_EXEC_HARDENING_FLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
 		-Wl,-rpath,$(ORIGIN)/../../lib
 
 proto: $(PROTO_GEN_CC) $(PROTO_GEN_HEADER)
@@ -836,7 +831,7 @@ $(PY_PROTO_BUILD_DIR)/%_pb2.py : $(PROTO_SRC_DIR)/%.proto \
 $(PY_PROTO_INIT): | $(PY_PROTO_BUILD_DIR)
 	touch $(PY_PROTO_INIT)
 
-clean:
+clean: mkldnn_clean
 	@- $(RM) -rf $(ALL_BUILD_DIRS)
 	@- $(RM) -rf $(OTHER_BUILD_DIR)
 	@- $(RM) -rf $(BUILD_DIR_LINK)

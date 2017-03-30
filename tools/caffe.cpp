@@ -103,6 +103,19 @@ DEFINE_bool(forward_only, false,
     "Optional; Execute only forward pass");
 DEFINE_string(engine, "",
     "Optional; Engine sequence in format: engine:subengine_1,subengine_2,...");
+DEFINE_string(collect_dir, "collect_out",
+    "Optional; Directory with reference binary files");
+DEFINE_string(compare_output_dir, "compare_out",
+    "Optional; Directory with output files");
+DEFINE_double(epsilon, 1e-3, "Optional; Layer output comparison error");
+DEFINE_bool(detection, false,
+    "Optional; Enables detection for testing. "
+    "By default it is false and classification is on.");
+DEFINE_bool(fast_compare, false,
+    "Optional; Break layer comparison after fast_compare_max errors found");
+DEFINE_int32(fast_compare_max, 50,
+    "Optional; Max errors for fast_compare");
+DEFINE_double(buffer_filler, std::nanf(""), "Buffer filler for compare tool");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -169,13 +182,6 @@ caffe::Phase get_phase_from_flags(caffe::Phase default_value) {
   return caffe::TRAIN;  // Avoid warning
 }
 
-// Parse stages from flags
-vector<string> get_stages_from_flags() {
-  vector<string> stages;
-  boost::split(stages, FLAGS_stage, boost::is_any_of(","));
-  return stages;
-}
-
 // caffe commands to call by
 //     caffe <command> <args>
 //
@@ -232,19 +238,26 @@ int train() {
   CHECK(!FLAGS_snapshot.size() || !FLAGS_weights.size())
       << "Give a snapshot to resume training or weights to finetune "
       "but not both.";
-  vector<string> stages = get_stages_from_flags();
 
   caffe::SolverParameter solver_param;
-  caffe::ReadSolverParamsFromTextFileOrDie(FLAGS_solver, &solver_param);
-
-  // Override engine if provided in cmd line
-  if (FLAGS_engine != "")
-    solver_param.set_engine(FLAGS_engine);
-
-  solver_param.mutable_train_state()->set_level(FLAGS_level);
-  for (int i = 0; i < stages.size(); i++) {
-    solver_param.mutable_train_state()->add_stage(stages[i]);
+  if (!caffe::ReadProtoFromTextFile(FLAGS_solver, &solver_param)) {
+    caffe::MultiPhaseSolverParameter multi_solver_params;
+    CHECK(caffe::ReadProtoFromTextFile(FLAGS_solver, &multi_solver_params))
+      << "Failed to parse SolverParameter file: "  <<  FLAGS_solver;
+    return multiphase_train(
+      &multi_solver_params,
+      FLAGS_solver,
+      FLAGS_engine,
+      FLAGS_level,
+      FLAGS_stage);
   }
+
+  use_flags(
+    &solver_param,
+    FLAGS_solver,
+    FLAGS_engine,
+    FLAGS_level,
+    FLAGS_stage);
 
   // If the gpus flag is not provided, allow the mode and device to be set
   // in the solver prototxt.
@@ -323,7 +336,7 @@ RegisterBrewFunction(train);
 int test() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
-  vector<string> stages = get_stages_from_flags();
+  vector<string> stages = get_stages_from_flags(FLAGS_stage);
 
   // Set device id and mode
   vector<int> gpus;
@@ -397,7 +410,7 @@ RegisterBrewFunction(test);
 int time() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to time.";
   caffe::Phase phase = get_phase_from_flags(caffe::TRAIN);
-  vector<string> stages = get_stages_from_flags();
+  vector<string> stages = get_stages_from_flags(FLAGS_stage);
 
   // Set device id and mode
   vector<int> gpus;
@@ -500,58 +513,7 @@ RegisterBrewFunction(time);
 
 // collect & compare: Debugging extansion for CPU-GPU functional comparison
 #include <stdio.h>
-typedef float real_t;
-
-void getFileName(char *file_name, bool use_gpu, const char *name, int id) {
-  const char *prefix = use_gpu ? "GPU" : "CPU";
-  snprintf(file_name, FILENAME_MAX, "%s%s%04i.bin", prefix, name, id);
-}
-
-bool saveToFile(bool use_gpu, const char *name, int id,
-    const real_t *data, unsigned count) {
-  char file_name[FILENAME_MAX];
-  getFileName(file_name, use_gpu, name, id);
-
-  FILE *file = fopen(file_name, "w+b");
-  if (!file) {
-    LOG(ERROR) << "Failed to create file '" << file_name << "'.";
-    return false;
-  }
-
-  size_t bytesToWrite = count * sizeof(data[0]);
-  size_t bytesWritten = fwrite(data, 1, bytesToWrite, file);
-  fclose(file);
-
-  if (bytesWritten != bytesToWrite) {
-    LOG(ERROR) << "Failed to write data to '" << file_name << "' file.";
-    return false;
-  }
-
-  return true;
-}
-
-bool loadFromFile(bool use_gpu, const char *name, int id,
-    real_t *data, unsigned count) {
-  char file_name[FILENAME_MAX];
-  getFileName(file_name, use_gpu, name, id);
-
-  FILE *file = fopen(file_name, "rb");
-  if (!file) {
-    LOG(ERROR) << "Failed to open file '" << file_name << "' for read.";
-    return false;
-  }
-
-  size_t bytesToRead = count * sizeof(data[0]);
-  size_t bytesRead = fread(data, 1, bytesToRead, file);
-  fclose(file);
-
-  if (bytesRead != bytesToRead) {
-    LOG(ERROR) << "Failed to read data from '" << file_name << "' file.";
-    return false;
-  }
-
-  return true;
-}
+#include "caffe/util/compareToolUtilities.h"
 
 int collect() {
   #ifndef DETERMINISTIC
@@ -572,51 +534,14 @@ int collect() {
     Caffe::set_mode(Caffe::CPU);
   }
 
-  Net<real_t> caffe_net(FLAGS_model, caffe::TRAIN);
-  const vector<shared_ptr<Layer<real_t> > >& layers = caffe_net.layers();
-  const vector<shared_ptr<Blob<real_t> > >& params = caffe_net.params();
-  const vector<vector<Blob<real_t>*> >& bottom_vecs = caffe_net.bottom_vecs();
-  const vector<vector<Blob<real_t>*> >& top_vecs = caffe_net.top_vecs();
-  const vector<vector<bool> >& bottom_need_backward =
-    caffe_net.bottom_need_backward();
-
-  FILE *infoFile = fopen(use_gpu ? "GPUInfo.txt" : "CPUInfo.txt", "w+t");
-  LOG(INFO) << "*** Collect procedure begins ***";
-
-  for (int i = 0; i < params.size(); i++) {
-    caffe::caffe_set(params[i]->count(), 0.f,
-      params[i]->mutable_cpu_diff());
+  boost::filesystem::path dir(FLAGS_collect_dir);
+  if (!boost::filesystem::exists(dir)) {
+      if (!boost::filesystem::create_directory(dir)) {
+          LOG(ERROR) << "Could not create directory for output files";
+      }
   }
 
-  for (int i = 0; i < layers.size(); ++i) {
-    LOG(INFO) << "Collecting FW Layer[" << i << "]: " << layers[i]->type();
-    fprintf(infoFile, "Fwrd%04i: %s\n", i, layers[i]->type());
-    layers[i]->Forward(bottom_vecs[i], top_vecs[i]);
-    saveToFile(use_gpu, "Fwrd", i,
-      top_vecs[i][0]->cpu_data(), top_vecs[i][0]->count());
-  }
-
-  for (int i = layers.size() - 1; i >= 0; --i) {
-    LOG(INFO) << "Collecting BW Layer[" << i << "]: " << layers[i]->type();
-    fprintf(infoFile, "Bwrd%04i: %s\n", i, layers[i]->type());
-    layers[i]->Backward(top_vecs[i], bottom_need_backward[i], bottom_vecs[i]);
-    if (bottom_need_backward[i][0]) {
-      saveToFile(use_gpu, "Bwrd", i,
-        bottom_vecs[i][0]->cpu_diff(), bottom_vecs[i][0]->count());
-    }
-  }
-
-  LOG(INFO) << "Collecting gradients and weights";
-  for (int i = 0; i < params.size(); i++) {
-    saveToFile(use_gpu, "Grad", i,
-      params[i]->cpu_diff(), params[i]->count());
-    saveToFile(use_gpu, "Wght", i,
-      params[i]->cpu_data(), params[i]->count());
-  }
-
-  LOG(INFO) << "*** Collect procedure ends ***";
-  fclose(infoFile);
-  return 0;
+  return collectAndCheckLayerData(true, use_gpu, FLAGS_collect_dir.c_str());
 }
 RegisterBrewFunction(collect);
 
@@ -639,55 +564,14 @@ int compare() {
     Caffe::set_mode(Caffe::CPU);
   }
 
-  Net<real_t> caffe_net(FLAGS_model, caffe::TRAIN);
-  const vector<shared_ptr<Layer<real_t> > >& layers = caffe_net.layers();
-  const vector<shared_ptr<Blob<real_t> > >& params = caffe_net.params();
-  const vector<vector<Blob<real_t>*> >& bottom_vecs = caffe_net.bottom_vecs();
-  const vector<vector<Blob<real_t>*> >& top_vecs = caffe_net.top_vecs();
-  const vector<vector<bool> >& bottom_need_backward =
-    caffe_net.bottom_need_backward();
-
-  FILE *infoFile = fopen(use_gpu ? "GPUInfo.txt" : "CPUInfo.txt", "w+t");
-  LOG(INFO) << "*** Compare procedure begins ***";
-
-  for (int i = 0; i < params.size(); i++) {
-    caffe::caffe_set(params[i]->count(), 0.f,
-      params[i]->mutable_cpu_diff());
+  boost::filesystem::path dir(FLAGS_compare_output_dir);
+  if (!boost::filesystem::exists(dir)) {
+      if (!boost::filesystem::create_directory(dir)) {
+          LOG(ERROR) << "Could not create directory for output files";
+      }
   }
-
-  for (int i = 0; i < layers.size(); ++i) {
-    LOG(INFO) << "Collecting FW Layer[" << i << "]: " << layers[i]->type();
-    fprintf(infoFile, "Fwrd%04i: %s\n", i, layers[i]->type());
-    layers[i]->Forward(bottom_vecs[i], top_vecs[i]);
-    saveToFile(use_gpu, "Fwrd", i,
-      top_vecs[i][0]->cpu_data(), top_vecs[i][0]->count());
-    loadFromFile(!use_gpu, "Fwrd", i,
-      top_vecs[i][0]->mutable_cpu_data(), top_vecs[i][0]->count());
-  }
-
-  for (int i = layers.size() - 1; i >= 0; --i) {
-    LOG(INFO) << "Collecting BW Layer[" << i << "]: " << layers[i]->type();
-    fprintf(infoFile, "Bwrd%04i: %s\n", i, layers[i]->type());
-    layers[i]->Backward(top_vecs[i], bottom_need_backward[i], bottom_vecs[i]);
-    if (bottom_need_backward[i][0]) {
-      saveToFile(use_gpu, "Bwrd", i,
-        bottom_vecs[i][0]->cpu_diff(), bottom_vecs[i][0]->count());
-      loadFromFile(!use_gpu, "Bwrd", i,
-        bottom_vecs[i][0]->mutable_cpu_diff(), bottom_vecs[i][0]->count());
-    }
-  }
-
-  LOG(INFO) << "Collecting gradients and weights";
-  for (int i = 0; i < params.size(); i++) {
-    saveToFile(use_gpu, "Grad", i,
-      params[i]->cpu_diff(), params[i]->count());
-    saveToFile(use_gpu, "Wght", i,
-      params[i]->cpu_data(), params[i]->count());
-  }
-
-  LOG(INFO) << "*** Compare procedure ends ***";
-  fclose(infoFile);
-  return 0;
+  return collectAndCheckLayerData(false,
+    use_gpu, FLAGS_compare_output_dir.c_str());
 }
 RegisterBrewFunction(compare);
 
