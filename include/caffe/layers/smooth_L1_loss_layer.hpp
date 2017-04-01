@@ -58,10 +58,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace caffe {
 
 /**
- * @brief SmoothL1LossLayer
- *
- * Fast R-CNN
- * Written by Ross Girshick
+ * @brief Computes the SmoothL1 loss as introduced in:@f$
+ *  Fast R-CNN, Ross Girshick, ICCV 2015.
  */
 template <typename Dtype>
 class SmoothL1LossLayer : public LossLayer<Dtype> {

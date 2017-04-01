@@ -1,3 +1,40 @@
+/*
+All modification made by Intel Corporation: © 2016 Intel Corporation
+
+All contributions by the University of California:
+Copyright (c) 2014, 2015, The Regents of the University of California (Regents)
+All rights reserved.
+
+All other contributions:
+Copyright (c) 2014, 2015, the respective contributors
+All rights reserved.
+For the list of contributors go to https://github.com/BVLC/caffe/blob/master/CONTRIBUTORS.md
+
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 //
 // caffe_.cpp provides wrappers of the caffe::Solver class, caffe::Net class,
 // caffe::Layer class and caffe::Blob class and some caffe::Caffe functions,
@@ -13,7 +50,6 @@
 #include <string>
 #include <vector>
 
-#include "gpu/mxGPUArray.h"
 #include "mex.h"
 
 #include "caffe/caffe.hpp"
@@ -46,14 +82,7 @@ void mxCHECK_FILE_EXIST(const char* file) {
 static vector<shared_ptr<Solver<float> > > solvers_;
 static vector<shared_ptr<Net<float> > > nets_;
 // init_key is generated at the beginning and everytime you call reset
-#ifndef _MSC_VER  // We are not using MSVC.
 static double init_key = static_cast<double>(caffe_rng_rand());
-#else  // We are using MSVC.
-// The original statement may cause MATLAB halt on Windows when cuBLAS is used.
-// Using a negative number as a flag instead of calling caffe_rng_rand().
-// init_key will be generated in entry function: mexFunction().
-static double init_key = -1;
-#endif  // !_MSC_VER
 
 /** -----------------------------------------------------------------
  ** data conversion functions
@@ -64,21 +93,9 @@ enum WhichMemory { DATA, DIFF };
 // Copy matlab array to Blob data or diff
 static void mx_mat_to_blob(const mxArray* mx_mat, Blob<float>* blob,
     WhichMemory data_or_diff) {
-
-  const float* mat_mem_ptr = NULL;
-  mxGPUArray const *mx_mat_gpu;
-  if (mxIsGPUArray(mx_mat)) {
-    mxInitGPU();
-    mx_mat_gpu = mxGPUCreateFromMxArray(mx_mat);
-    mat_mem_ptr = reinterpret_cast<const float*>(
-      mxGPUGetDataReadOnly(mx_mat_gpu));
-    mxCHECK(blob->count() == mxGPUGetNumberOfElements(mx_mat_gpu),
+  mxCHECK(blob->count() == mxGetNumberOfElements(mx_mat),
       "number of elements in target blob doesn't match that in input mxArray");
-  } else {
-    mxCHECK(blob->count() == mxGetNumberOfElements(mx_mat),
-      "number of elements in target blob doesn't match that in input mxArray");
-    mat_mem_ptr = reinterpret_cast<const float*>(mxGetData(mx_mat));
-  }
+  const float* mat_mem_ptr = reinterpret_cast<const float*>(mxGetData(mx_mat));
   float* blob_mem_ptr = NULL;
   switch (Caffe::mode()) {
   case Caffe::CPU:
@@ -93,10 +110,6 @@ static void mx_mat_to_blob(const mxArray* mx_mat, Blob<float>* blob,
     mxERROR("Unknown Caffe mode");
   }
   caffe_copy(blob->count(), mat_mem_ptr, blob_mem_ptr);
-
-  if (mxIsGPUArray(mx_mat)) {
-    mxGPUDestroyGPUArray(mx_mat_gpu);
-  }
 }
 
 // Copy Blob data or diff to matlab array
@@ -138,17 +151,6 @@ static mxArray* int_vec_to_mx_vec(const vector<int>& int_vec) {
     vec_mem_ptr[i] = static_cast<double>(int_vec[i]);
   }
   return mx_vec;
-}
-
-
-// Convert vector<vector<int> > to matlab cell of (row vector)s
-static mxArray* int_vec_vec_to_mx_cell_vec(
-  const vector<vector<int> >& int_vec_vec) {
-  mxArray* mx_cell_vec = mxCreateCellMatrix(int_vec_vec.size(), 1);
-  for (int i = 0; i < int_vec_vec.size(); i++) {
-    mxSetCell(mx_cell_vec, i, int_vec_to_mx_vec(int_vec_vec[i]));
-  }
-  return mx_cell_vec;
 }
 
 // Convert vector<string> to matlab cell vector of strings
@@ -337,16 +339,9 @@ static void net_get_attr(MEX_ARGS) {
   mxCHECK(nrhs == 1 && mxIsStruct(prhs[0]),
       "Usage: caffe_('net_get_attr', hNet)");
   Net<float>* net = handle_to_ptr<Net<float> >(prhs[0]);
-  const int net_attr_num = 8;
-  const char* net_attrs[net_attr_num] = {
-    "hLayer_layers",
-    "hBlob_blobs",
-    "input_blob_indices",
-    "output_blob_indices",
-    "layer_names",
-    "blob_names",
-    "bottom_id_vecs",
-    "top_id_vecs" };
+  const int net_attr_num = 6;
+  const char* net_attrs[net_attr_num] = { "hLayer_layers", "hBlob_blobs",
+      "input_blob_indices", "output_blob_indices", "layer_names", "blob_names"};
   mxArray* mx_net_attr = mxCreateStructMatrix(1, 1, net_attr_num,
       net_attrs);
   mxSetField(mx_net_attr, 0, "hLayer_layers",
@@ -487,8 +482,7 @@ static void blob_get_data(MEX_ARGS) {
 
 // Usage: caffe_('blob_set_data', hBlob, new_data)
 static void blob_set_data(MEX_ARGS) {
-  mxCHECK(nrhs == 2 && mxIsStruct(prhs[0]) &&
-    (mxIsSingle(prhs[1]) || mxIsGPUArray(prhs[1])),
+  mxCHECK(nrhs == 2 && mxIsStruct(prhs[0]) && mxIsSingle(prhs[1]),
       "Usage: caffe_('blob_set_data', hBlob, new_data)");
   Blob<float>* blob = handle_to_ptr<Blob<float> >(prhs[0]);
   mx_mat_to_blob(prhs[1], blob, DATA);

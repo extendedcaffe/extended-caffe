@@ -1,11 +1,52 @@
+/*
+All modification made by Intel Corporation: © 2016 Intel Corporation
+
+All contributions by the University of California:
+Copyright (c) 2014, 2015, The Regents of the University of California (Regents)
+All rights reserved.
+
+All other contributions:
+Copyright (c) 2014, 2015, the respective contributors
+All rights reserved.
+For the list of contributors go to https://github.com/BVLC/caffe/blob/master/CONTRIBUTORS.md
+
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Intel Corporation nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 // ------------------------------------------------------------------
 // Fast R-CNN
-// Copyright (c) 2015 Microsoft
+// copyright (c) 2015 Microsoft
 // Licensed under The MIT License [see fast-rcnn/LICENSE for details]
 // Written by Ross Girshick
+// Modified by Wei Liu
 // ------------------------------------------------------------------
 
+#include <vector>
+
 #include "caffe/layers/smooth_L1_loss_layer.hpp"
+#include "caffe/util/math_functions.hpp"
 
 namespace caffe {
 
@@ -16,8 +57,7 @@ void SmoothL1LossLayer<Dtype>::LayerSetUp(
   sigma2_ = loss_param.sigma() * loss_param.sigma();
   has_weights_ = (bottom.size() >= 3);
   if (has_weights_) {
-    CHECK_EQ(bottom.size(), 4) << "If weights are used, must specify both "
-      "inside and outside weights";
+    CHECK_EQ(bottom.size(), 4) << "If weights are used, must specify both inside and outside weights";
   }
 }
 
@@ -62,7 +102,7 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
 // #endif
     for(int index = 0; index < count; index++) {
         Dtype val = diff_.cpu_data()[index];
-        Dtype abs_val = abs(val);
+        Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
            errors_.mutable_cpu_data()[index] = 0.5 * val * val * sigma2_;
         } 
@@ -93,7 +133,7 @@ void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, con
         // f'(x) = sigma * sigma * x         if |x| < 1 / sigma / sigma
         //       = sign(x)                   otherwise
         Dtype val = diff_.cpu_data()[index];
-        Dtype abs_val = abs(val);
+        Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
           diff_.mutable_cpu_data()[index] = sigma2_ * val;
         } 

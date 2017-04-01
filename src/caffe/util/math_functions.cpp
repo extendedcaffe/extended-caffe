@@ -106,7 +106,8 @@ void caffe_set(const size_t N, const Dtype alpha, Dtype* Y) {
   // If we are executing parallel region already then do not start another one
   // if also number of data to be processed is smaller than arbitrary:
   // threashold 12*4 cachelines per thread then no parallelization is to be made
-#ifdef _OPENMP
+  #ifdef _OPENMP
+
   int nthr = omp_get_max_threads();
   int threshold = nthr * caffe::cpu::OpenMpManager::getProcessorSpeedMHz() / 3;
   bool run_parallel =  // Do not do parallel computation from non major threads
@@ -131,7 +132,8 @@ void caffe_set(const size_t N, const Dtype alpha, Dtype* Y) {
 
     return;
   }
-#endif
+
+  #endif
 
   if (alpha == 0) {
     memset(Y, 0, sizeof(Dtype) * N);  // NOLINT(caffe/alt_fn)

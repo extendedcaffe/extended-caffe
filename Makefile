@@ -269,7 +269,7 @@ ifeq ($(USE_OPENCV), 1)
 	LIBRARIES += opencv_core opencv_highgui opencv_imgproc 
 
 	ifeq ($(OPENCV_VERSION), 3)
-		LIBRARIES += opencv_imgcodecs
+		LIBRARIES += opencv_imgcodecs opencv_videoio
 	endif
 
 endif
@@ -483,7 +483,7 @@ endif
 
 # include Makefile.mkldnn
 ifeq ($(USE_MKLDNN_AS_DEFAULT_ENGINE), 1)
- 	CXXFLAGS += -DUSE_MKLDNN_AS_DEFAULT_ENGINE
+	CXXFLAGS += -DUSE_MKLDNN_AS_DEFAULT_ENGINE
 endif
 
 # BOOST configuration
