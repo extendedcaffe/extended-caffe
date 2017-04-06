@@ -382,16 +382,6 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
             scaleShift_buffer_[channels_ + i] = 0;
          }
       }
-
-      if (use_global_stats_) {
-        // use the stored mean/variance estimates.
-        const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
-                                    0 : 1 / this->blobs_[2]->cpu_data()[0];
-        caffe_cpu_scale(this->blobs_[0]->count(), scale_factor,
-                    this->blobs_[0]->cpu_data(), mean_buffer_);
-        caffe_cpu_scale(this->blobs_[1]->count(), scale_factor,
-                    this->blobs_[1]->cpu_data(), variance_buffer_);
-      }
   }
 
   if (use_weight_bias_) {
@@ -411,9 +401,19 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
     // doing Backward
     // TODO: make a caffe_coppy working on blobs
     caffe_copy(amount_to_copy, static_cast<Dtype*>(bottom_data),
-                                                      temp_.mutable_cpu_data());
+               temp_.mutable_cpu_data());
   }
 
+  if (use_global_stats_) {
+    // use the stored mean/variance estimates.
+    const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
+                               0 : 1 / this->blobs_[2]->cpu_data()[0];
+    caffe_cpu_scale(this->blobs_[0]->count(), scale_factor,
+                    this->blobs_[0]->cpu_data(), mean_buffer_);
+    caffe_cpu_scale(this->blobs_[1]->count(), scale_factor,
+                    this->blobs_[1]->cpu_data(), variance_buffer_);
+  }
+ 
   dnnError_t e;
   void* BatchNorm_res[dnnResourceNumber] = {NULL};
   BatchNorm_res[dnnResourceMean] = mean_buffer_;
@@ -451,91 +451,80 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
   }
 
 #if DUMP_LAYER_IO
-  if (1) {
-    LOG(ERROR) << this->layer_param_.name();
-    FILE *fp = NULL;
-    char dump_name[256] = {0};
+  LOG(ERROR) << this->layer_param_.name();
+  FILE *fp = NULL;
+  char dump_name[256] = {0};
 
-#if 1
-   // print scale shift
-   sprintf(dump_name, "./%s_mkl_scaleshift.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < channels_ * 2; n++) {
-      fprintf(fp, "%f, ", scaleShift_buffer_[n]);
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  // scale shift
+  sprintf(dump_name, "./%s_mkl_scaleshift.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < channels_ * 2; n++) {
+     fprintf(fp, "%f, ", scaleShift_buffer_[n]);
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print mean
-   sprintf(dump_name, "./%s_mkl_mean.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < channels_; n++) {
-      fprintf(fp, "%f, ", mean_buffer_[n]);
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  // mean
+  sprintf(dump_name, "./%s_mkl_mean.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < channels_; n++) {
+     fprintf(fp, "%f, ", mean_buffer_[n]);
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print variance
-   sprintf(dump_name, "./%s_mkl_variance.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < channels_; n++) {
-      fprintf(fp, "%f, ", variance_buffer_[n]);
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  // variance
+  sprintf(dump_name, "./%s_mkl_variance.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < channels_; n++) {
+     fprintf(fp, "%f, ", variance_buffer_[n]);
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print bottom
-   sprintf(dump_name, "./%s_mkl_bottom.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < 1; n++) {
-     for (int c = 0; c < 1; c++) {
-       for (int h = 0; h < 1; h++) {
-         for (int w = 0; w < 1; w++) {
-            fprintf(fp, "%f, ", bottom[0]->data_at(n, c, h, w));
-         }
-       }
-     }
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  // bottom
+  sprintf(dump_name, "./%s_mkl_bottom.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < 1; n++) {
+    for (int c = 0; c < 1; c++) {
+      for (int h = 0; h < 1; h++) {
+        for (int w = 0; w < 1; w++) {
+           fprintf(fp, "%f, ", bottom[0]->data_at(n, c, h, w));
+        }
+      }
+    }
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print top
-   sprintf(dump_name, "./%s_mkl_top.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < 1; n++) {
-     for (int c = 0; c < 1; c++) {
-       for (int h = 0; h < 1; h++) {
-         for (int w = 0; w < 1; w++) {
-            fprintf(fp, "%f, ", top[0]->data_at(n, c, h, w));
-         }
-       }
-     }
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  // top
+  sprintf(dump_name, "./%s_mkl_top.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < 1; n++) {
+    for (int c = 0; c < 1; c++) {
+      for (int h = 0; h < 1; h++) {
+        for (int w = 0; w < 1; w++) {
+           fprintf(fp, "%f, ", top[0]->data_at(n, c, h, w));
+        }
+      }
+    }
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
  
-   if (isnan(bottom[0]->data_at(0, 0, 0, 0)) || bottom[0]->data_at(0, 0, 0, 0) > 1000 || bottom[0]->data_at(0, 0, 0, 0) < -1000) {
-     LOG(ERROR) << "bottom abnormal";
-     exit(-1);
-   }
-   if (isnan(top[0]->data_at(0, 0, 0, 0)) || top[0]->data_at(0, 0, 0, 0) > 1000 || top[0]->data_at(0, 0, 0, 0) < -1000) {
-     LOG(ERROR) << "top abnormal";
-     exit(-1);
-   }
+  if (isnan(bottom[0]->data_at(0, 0, 0, 0)) || bottom[0]->data_at(0, 0, 0, 0) > 1000 || bottom[0]->data_at(0, 0, 0, 0) < -1000) {
+    LOG(ERROR) << "bottom abnormal";
+    exit(-1);
+  }
+
+  if (isnan(top[0]->data_at(0, 0, 0, 0)) || top[0]->data_at(0, 0, 0, 0) > 1000 || top[0]->data_at(0, 0, 0, 0) < -1000) {
+    LOG(ERROR) << "top abnormal";
+    exit(-1);
   }
 #endif
 
@@ -597,31 +586,26 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
   }
 
 #if DUMP_LAYER_IO
-  if (1) {
-    LOG(ERROR) << this->layer_param_.name();
-    FILE *fp = NULL;
-    char dump_name[256] = {0};
+  LOG(ERROR) << this->layer_param_.name();
+  FILE *fp = NULL;
+  char dump_name[256] = {0};
 
+  // bottom
+  sprintf(dump_name, "./%s_mkl_bottom_bwd.txt", this->layer_param_.name().c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < 1; n++) {
+    for (int c = 0; c < 1; c++) {
+      for (int h = 0; h < 1; h++) {
+        for (int w = 0; w < 1; w++) {
+           fprintf(fp, "%f, ", bottom[0]->data_at(n, c, h, w));
+        }
+      }
+    }
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print bottom
-   sprintf(dump_name, "./%s_mkl_bottom_bwd.txt", this->layer_param_.name().c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < 1; n++) {
-     for (int c = 0; c < 1; c++) {
-       for (int h = 0; h < 1; h++) {
-         for (int w = 0; w < 1; w++) {
-            fprintf(fp, "%f, ", bottom[0]->data_at(n, c, h, w));
-         }
-       }
-     }
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
-
-#if 1
    // print mean
    sprintf(dump_name, "./%s_mkl_mean_bwd.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -631,9 +615,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
 
-#if 1
    // print variance
    sprintf(dump_name, "./%s_mkl_variance_bwd.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -643,9 +625,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
 
-#if 1
    // print scaleshift data
    sprintf(dump_name, "./%s_mkl_scaleshift_bwd.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -655,9 +635,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
 
-#if 1
    // print scaleshift diff
    sprintf(dump_name, "./%s_mkl_scaleshift_diff.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -667,9 +645,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
 
-#if 1
    // print top diff
    sprintf(dump_name, "./%s_mkl_top_diff.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -685,9 +661,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
 
-#if 1
    // print bottom diff
    sprintf(dump_name, "./%s_mkl_bottom_diff.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
@@ -703,8 +677,6 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    fprintf(fp, "\n");
    fclose(fp);
    fp = NULL;
-#endif
-  }
 #endif
 }
 
