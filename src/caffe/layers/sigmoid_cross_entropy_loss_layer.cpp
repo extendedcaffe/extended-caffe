@@ -74,10 +74,15 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Forward_cpu(
   // Stable version of loss computation from input data
   const Dtype* input_data = bottom[0]->cpu_data();
   const Dtype* target = bottom[1]->cpu_data();
-  Dtype loss = 0;
+  const Dtype* weights = (bottom.size() > 2) ? bottom[2]->cpu_data() : NULL;
+  Dtype loss = Dtype(0);
+#ifdef _OPENMP
+  #pragma omp parallel for reduction(+: loss) if(count > 1)
+#endif
   for (int i = 0; i < count; ++i) {
-    loss -= input_data[i] * (target[i] - (input_data[i] >= 0)) -
-        log(1 + exp(input_data[i] - 2 * input_data[i] * (input_data[i] >= 0)));
+    const Dtype weight = (weights != NULL) ? weights[count] : Dtype(1);
+    loss += -weight * (input_data[i] * (target[i] - (input_data[i] >= 0)) -
+        log(1 + exp(input_data[i] - 2 * input_data[i] * (input_data[i] >= 0))));
   }
   top[0]->mutable_cpu_data()[0] = loss / num;
 }
@@ -96,8 +101,12 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Backward_cpu(
     const int num = bottom[0]->num();
     const Dtype* sigmoid_output_data = sigmoid_output_->cpu_data();
     const Dtype* target = bottom[1]->cpu_data();
+    const Dtype* weights = (bottom.size() > 2) ? bottom[2]->cpu_data() : NULL;
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     caffe_sub(count, sigmoid_output_data, target, bottom_diff);
+    if (weights != NULL) {
+      caffe_mul(count, weights, bottom_diff, bottom_diff);
+    }
     // Scale down gradient
     const Dtype loss_weight = top[0]->cpu_diff()[0];
     caffe_scal(count, loss_weight / num, bottom_diff);
