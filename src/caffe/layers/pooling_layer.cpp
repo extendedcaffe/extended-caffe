@@ -479,8 +479,6 @@ void PoolingLayer<Dtype>::Forward_cpu(
                          use_top_mask);
   } else if (num_spatial_axes_ == 3) {
       // Process 3D Pooling
-      int* mask = NULL;
-      Dtype* top_mask = NULL;
       vector<int> offset(2, 0);
       offset[1] = 1;
 
@@ -498,11 +496,9 @@ void PoolingLayer<Dtype>::Forward_cpu(
       switch (this->layer_param_.pooling_param().pool()) {
       case PoolingParameter_PoolMethod_MAX:
         if (use_top_mask) {
-          top_mask = top[1]->mutable_cpu_data();
-          caffe_set(top_count, Dtype(-1), top_mask);
+          caffe_set(top_count, Dtype(-1), top[1]->mutable_cpu_data());
         } else {
-          mask = max_idx_.mutable_cpu_data();
-          caffe_set(top_count, -1, mask);
+          caffe_set(top_count, -1, max_idx_.mutable_cpu_data());
         }
         caffe_set(top_count, Dtype(-FLT_MAX), top_data);
 
@@ -528,8 +524,10 @@ void PoolingLayer<Dtype>::Forward_cpu(
         for (int n = 0; n < num_; ++n) {
           for (int c = 0; c < channels_; ++c) {
             long nc = n * channels_ + c;
-            bottom_data = bottom[0]->cpu_data() + nc * bottom_offset;
-            top_data = top[0]->mutable_cpu_data() + nc * top_offset;
+            const Dtype *bottom_data2 = bottom[0]->cpu_data() + nc * bottom_offset;
+            Dtype *top_data2 = top[0]->mutable_cpu_data() + nc * top_offset;
+            Dtype *top_mask = NULL;
+            int *mask = NULL;
             if (use_top_mask) {
               top_mask = top[1]->mutable_cpu_data() + nc * top_offset;
             } else {
@@ -555,8 +553,8 @@ void PoolingLayer<Dtype>::Forward_cpu(
                       for (int h = hstart; h < hend; ++h) {
                         for (int w = wstart; w < wend; ++w) {
                           const int index = (z * input_shape_data[2] + h) * input_shape_data[3] + w;
-                          if (bottom_data[index] > top_data[pool_index]) {
-                            top_data[pool_index] = bottom_data[index];
+                          if (bottom_data2[index] > top_data2[pool_index]) {
+                            top_data2[pool_index] = bottom_data2[index];
                             if (use_top_mask) {
                               top_mask[pool_index] = static_cast<Dtype>(index);
                             } else {
@@ -579,10 +577,9 @@ void PoolingLayer<Dtype>::Forward_cpu(
 #endif
         for (int n = 0; n < num_; ++n) {
           for (int c = 0; c < channels_; ++c) {
-
             long nc = n * channels_ + c;
-            bottom_data = bottom[0]->cpu_data() + nc * bottom_offset;
-            top_data = top[0]->mutable_cpu_data() + nc * top_offset;
+            const Dtype *bottom_data2 = bottom[0]->cpu_data() + nc * bottom_offset;
+            Dtype *top_data2 = top[0]->mutable_cpu_data() + nc * top_offset;
 
             for (int pz = 0; pz < output_shape_data[0]; ++pz) {
               for (int ph = 0; ph < output_shape_data[1]; ++ph) {
@@ -613,11 +610,11 @@ void PoolingLayer<Dtype>::Forward_cpu(
                     for (int h = hstart; h < hend; ++h) {
                       for (int w = wstart; w < wend; ++w) {
                         const int index = (z * input_shape_data[2] + h) * input_shape_data[3] + w;
-                        top_data[pool_index] += bottom_data[index];
+                        top_data2[pool_index] += bottom_data2[index];
                       }
                     }
                   }
-                  top_data[pool_index] /= pool_size;
+                  top_data2[pool_index] /= pool_size;
                 }
               }
             }
@@ -680,9 +677,6 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                          this);
       } else if (num_spatial_axes_ == 3) {
         /* Process 3D pooling */
-        const int* mask = NULL;
-        const Dtype* top_mask = NULL;
-
         const int* kernel_shape = this->kernel_shape_.cpu_data();
         const int* pad_data = this->pad_.cpu_data();
         const int* stride_data = this->stride_.cpu_data();
@@ -703,8 +697,10 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           for (int n = 0; n < top_num; ++n) {
             for (int c = 0; c < channels_; ++c) {
               long nc = n * channels_ + c;
-              bottom_diff = bottom[0]->mutable_cpu_diff() + nc * bottom_offset;
-              top_diff = top[0]->cpu_diff() + nc * top_offset;
+              Dtype *bottom_diff2 = bottom[0]->mutable_cpu_diff() + nc * bottom_offset;
+              const Dtype *top_diff2 = top[0]->cpu_diff() + nc * top_offset;
+              const Dtype *top_mask = NULL;
+              const int *mask = NULL;
               if (use_top_mask) {
                 top_mask = top[1]->cpu_data() + nc * top_offset;
               } else {
@@ -716,7 +712,7 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                   for (int pw = 0; pw < output_shape_data[2]; ++pw) {
                     const int index = (pz * output_shape_data[1] + ph) * output_shape_data[2] + pw;
                     const int bottom_index = use_top_mask ? top_mask[index] : mask[index];
-                    bottom_diff[bottom_index] += top_diff[index];
+                    bottom_diff2[bottom_index] += top_diff2[index];
                   }
                 }
               }
@@ -730,8 +726,8 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           for (int n = 0; n < top_num; ++n) {
             for (int c = 0; c < channels_; ++c) {
               long nc = n * channels_ + c;
-              bottom_diff = bottom[0]->mutable_cpu_diff() + nc * bottom_offset;
-              top_diff = top[0]->cpu_diff() + nc * top_offset;
+              Dtype *bottom_diff2 = bottom[0]->mutable_cpu_diff() + nc * bottom_offset;
+              const Dtype *top_diff2 = top[0]->cpu_diff() + nc * top_offset;
 
               for (int pz = 0; pz < output_shape_data[0]; ++pz) {
                 for (int ph = 0; ph < output_shape_data[1]; ++ph) {
@@ -756,7 +752,7 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                       for (int h = hstart; h < hend; ++h) {
                         for (int w = wstart; w < wend; ++w) {
                           const int index = (z * input_shape_data[2] + h) * input_shape_data[3] + w;
-                          bottom_diff[index] += top_diff[pool_index] / pool_size;
+                          bottom_diff2[index] += top_diff2[pool_index] / pool_size;
                         }
                       }
                     }
