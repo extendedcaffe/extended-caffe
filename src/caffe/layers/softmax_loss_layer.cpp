@@ -48,6 +48,8 @@ using namespace MLSL;
 
 namespace caffe {
 
+#define _EPSILON Dtype(1e-8)
+
 template <typename Dtype>
 void SoftmaxWithLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
@@ -156,44 +158,117 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
   const Dtype* label = bottom[1]->cpu_data();
   int dim = prob_.count() / outer_num_;
   int count = 0;
-  int count_local = 0;
   Dtype loss = Dtype(0);
-  Dtype loss_local = Dtype(0);
 
-  const Dtype* weights = (bottom.size() > 2) ? bottom[2]->cpu_data() : NULL;
+  if (bottom.size() == 3) {
+      const Dtype* weights = bottom[2]->cpu_data();
+      Dtype weighted_sum = Dtype(0);
+      Dtype weighted_sum_local = Dtype(0);
+      Dtype loss_local = Dtype(0);
 
-  for (int i = 0; i < outer_num_; ++i) {
-    count_local = 0;
-    loss_local = Dtype(0);
-#ifdef _OPENMP
-  #pragma omp parallel for reduction(+: loss_local, count_local) if(inner_num_ > 1)
-#endif
-    for (int j = 0; j < inner_num_; j++) {
-      const int label_value = static_cast<int>(label[i * inner_num_ + j]);
-      if (has_ignore_label_ && label_value == ignore_label_) {
-        continue;
+      for (int i = 0; i < outer_num_; ++i) {
+        weighted_sum_local = Dtype(0);
+        loss_local = Dtype(0);
+
+        #ifdef _OPENMP
+        #pragma omp parallel for reduction(+: loss_local, weighted_sum_local) if(inner_num_ > 1)
+        #endif
+        for (int j = 0; j < inner_num_; j++) {
+          const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+          if (has_ignore_label_ && label_value == ignore_label_) {
+            continue;
+          }
+
+          DCHECK_GE(label_value, 0);
+          DCHECK_LT(label_value, prob_.shape(softmax_axis_));
+          Dtype p = prob_data[i * dim + label_value * inner_num_ + j];
+          loss_local += weights[i * inner_num_ + j] * log(std::max(Dtype(FLT_MIN), std::min(p, Dtype(1.0 - FLT_MIN))));
+          weighted_sum_local += weights[i * inner_num_ + j];
+        }
+
+        weighted_sum += weighted_sum_local;
+        loss -= loss_local;
       }
-      const Dtype weight = (weights != NULL) ? weights[i * inner_num_ + j] : Dtype(1);
+      // LOG(ERROR) << "outer num: " << outer_num_ << ", inner_num_: " << inner_num_;
+      // LOG(ERROR) << "count: " << count << ", loss: " << loss;
 
-      DCHECK_GE(label_value, 0);
-      DCHECK_LT(label_value, prob_.shape(softmax_axis_));
-      loss_local += weight * log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
-                                          Dtype(FLT_MIN)));
-      ++count_local;
+      top[0]->mutable_cpu_data()[0] = loss / weighted_sum;
+      if (top.size() == 2) {
+        top[1]->ShareData(prob_);
+      } 
+  } else {
+      int count_local = 0;
+      Dtype loss_local = Dtype(0);
+
+      for (int i = 0; i < outer_num_; ++i) {
+        count_local = 0;
+        loss_local = Dtype(0);
+
+        #ifdef _OPENMP
+        #pragma omp parallel for reduction(+: loss_local, count_local) if(inner_num_ > 1)
+        #endif
+        for (int j = 0; j < inner_num_; j++) {
+          const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+          if (has_ignore_label_ && label_value == ignore_label_) {
+            continue;
+          }
+
+          DCHECK_GE(label_value, 0);
+          DCHECK_LT(label_value, prob_.shape(softmax_axis_));
+          Dtype p = prob_data[i * dim + label_value * inner_num_ + j];
+          loss_local += log(std::max(Dtype(FLT_MIN), std::min(p, Dtype(1.0 - FLT_MIN))));
+          ++count_local;
+        }
+
+        count += count_local;
+        loss -= loss_local;
+      }
+      // LOG(ERROR) << "outer num: " << outer_num_ << ", inner_num_: " << inner_num_;
+      // LOG(ERROR) << "count: " << count << ", loss: " << loss;
+
+      Dtype normalizer = LossLayer<Dtype>::GetNormalizer(normalization_, outer_num_, inner_num_, count);
+      top[0]->mutable_cpu_data()[0] = loss / normalizer;
+      if (top.size() == 2) {
+        top[1]->ShareData(prob_);
+      }
+  }
+
+#if DUMP_LAYER_IO
+  // LOG(ERROR) << "softmax loss";
+  FILE *fp = NULL;
+  char dump_name[256] = {0};
+
+  // weights
+  if (weights) {
+    sprintf(dump_name, "./softmax_loss_weights.txt");
+    fp = fopen(dump_name, "wb+");
+    for (int i = 0 ; i < outer_num_ * inner_num_; i++) {
+       fprintf(fp, "%f, ", weights[i]);
     }
-
-    count += count_local;
-    loss -= loss_local;
+    fprintf(fp, "\n");
+    fclose(fp);
   }
-  // LOG(ERROR) << "outer num: " << outer_num_ << ", inner_num_: " << inner_num_;
-  // LOG(ERROR) << "count: " << count << ", loss: " << loss;
 
-  Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-      normalization_, outer_num_, inner_num_, count);
-  top[0]->mutable_cpu_data()[0] = loss / normalizer;
-  if (top.size() == 2) {
-    top[1]->ShareData(prob_);
+  // prob
+  sprintf(dump_name, "./softmax_loss_prob.txt");
+  fp = fopen(dump_name, "wb+");
+  Dtype max_prob = -1;
+  for (int i = 0; i < prob_.count(); i++) {
+       fprintf(fp, "%f, ", prob_data[i]);
+       if (max_prob < prob_data[i] || isnan(prob_data[i])) {
+         max_prob = prob_data[i];
+       }
   }
+  fprintf(fp, "\n");
+  fclose(fp);
+
+  LOG(ERROR) << "max prob: " << max_prob;
+
+  if (isnan(loss)) {
+    LOG(ERROR) << "loss is nan, exit";
+    exit(-1);
+  }
+#endif
 }
 
 template <typename Dtype>
@@ -204,35 +279,89 @@ void SoftmaxWithLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                << " Layer cannot backpropagate to label inputs.";
   }
   if (propagate_down[0]) {
-    Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
-    const Dtype* prob_data = prob_.cpu_data();
-    caffe_copy(prob_.count(), prob_data, bottom_diff);
-    const Dtype* label = bottom[1]->cpu_data();
-    int dim = prob_.count() / outer_num_;
-    int count = 0;
-    const Dtype* weights = (bottom.size() > 2) ? bottom[2]->cpu_data() : NULL;
-    for (int i = 0; i < outer_num_; ++i) {
-      for (int j = 0; j < inner_num_; ++j) {
-        const int label_value = static_cast<int>(label[i * inner_num_ + j]);
-        if (has_ignore_label_ && label_value == ignore_label_) {
-          for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
-            bottom_diff[i * dim + c * inner_num_ + j] = 0;
+    if (bottom.size() == 3) {
+        Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
+        const Dtype* prob_data = prob_.cpu_data();
+        caffe_copy(prob_.count(), prob_data, bottom_diff);
+        const Dtype* label = bottom[1]->cpu_data();
+        int dim = prob_.count() / outer_num_;
+        Dtype weight_sum = Dtype(0);
+        const Dtype* weights = bottom[2]->cpu_data();
+        for (int i = 0; i < outer_num_; ++i) {
+          for (int j = 0; j < inner_num_; ++j) {
+            const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+            if (has_ignore_label_ && label_value == ignore_label_) {
+              for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+                bottom_diff[i * dim + c * inner_num_ + j] = 0;
+              }
+            } else {
+              bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
+              for (int c = 0; c < bottom[0]->shape(1); ++c) {
+                bottom_diff[i * dim + c * inner_num_ + j] *= weights[i * inner_num_ + j];
+              }
+              weight_sum += weights[i * inner_num_ + j];
+            }
           }
-        } else {
-          bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
-          if (weights) {
-            bottom_diff[i * dim + label_value * inner_num_ + j] *= weights[i * inner_num_ + j];
-          }
-          ++count;
         }
-      }
+        // Scale gradient
+        Dtype loss_weight = top[0]->cpu_diff()[0] / weight_sum;
+        caffe_scal(prob_.count(), loss_weight, bottom_diff); 
+    } else {
+        Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
+        const Dtype* prob_data = prob_.cpu_data();
+        caffe_copy(prob_.count(), prob_data, bottom_diff);
+        const Dtype* label = bottom[1]->cpu_data();
+        int dim = prob_.count() / outer_num_;
+        int count = 0;
+        for (int i = 0; i < outer_num_; ++i) {
+          for (int j = 0; j < inner_num_; ++j) {
+            const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+            if (has_ignore_label_ && label_value == ignore_label_) {
+              for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+                bottom_diff[i * dim + c * inner_num_ + j] = 0;
+              }
+            } else {
+              bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
+              ++count;
+            }
+          }
+        }
+        // Scale gradient
+        Dtype normalizer = LossLayer<Dtype>::GetNormalizer(normalization_, outer_num_, inner_num_, count);
+        Dtype loss_weight = top[0]->cpu_diff()[0] / normalizer;
+        caffe_scal(prob_.count(), loss_weight, bottom_diff);
     }
-    // Scale gradient
-    Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-        normalization_, outer_num_, inner_num_, count);
-    Dtype loss_weight = top[0]->cpu_diff()[0] / normalizer;
-    caffe_scal(prob_.count(), loss_weight, bottom_diff);
+}
+
+#if DUMP_LAYER_IO
+  FILE *fp = NULL;
+  char dump_name[256] = {0};
+  bool has_nan = false;
+
+  // LOG(ERROR) << "top diff: " << top[0]->cpu_diff()[0];
+  
+  // bottom diff
+  sprintf(dump_name, "./softmax_loss_botton_diff.txt");
+  fp = fopen(dump_name, "wb+");
+  Dtype min_diff = 1;
+  for (int i = 0 ; i < bottom[0]->count(); i++) {
+     fprintf(fp, "%f, ", bottom[0]->cpu_diff()[i]);
+     if (isnan(bottom[0]->cpu_diff()[i])) {
+       has_nan = true;
+     }
+     if (min_diff > bottom[0]->cpu_diff()[i]){
+       min_diff = bottom[0]->cpu_diff()[i];
+     }
   }
+  fprintf(fp, "\n");
+  fclose(fp);
+
+  LOG(ERROR) << "bottom min diff: " << min_diff;
+  if (has_nan) {
+    LOG(ERROR) << "bottom diff has nan";
+    exit(-1);
+  }
+#endif
 }
 
 #ifdef CPU_ONLY

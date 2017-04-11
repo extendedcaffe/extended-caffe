@@ -1225,32 +1225,27 @@ void Net<Dtype>::BackwardFromTo(int start, int end) {
   }
 
   if (time_info_) {
-  	backward_time += backward_timer.MicroSeconds();
-	iter_cnt++;
+    backward_time += backward_timer.MicroSeconds();
+    iter_cnt++;
 
-	LOG(ERROR) << "##################### Iteration : " << iter_cnt;
-	if (iter_cnt == FLAGS_iterations) {
-		LOG(ERROR) << "Average time per layer: ";
-		for (int i = 0; i < layers_.size(); ++i) {
-		const caffe::string& layername = layers_[i]->layer_param().name();
-		LOG(ERROR) << std::setfill(' ') << std::setw(10) << layername <<
-		  "\tforward: " << forward_time_per_layer[i] / 1000. /
-		  FLAGS_iterations << " ms.";
-		LOG(ERROR) << std::setfill(' ') << std::setw(10) << layername  <<
-		  "\tbackward: " << backward_time_per_layer[i] / 1000.0 /
-		  FLAGS_iterations << " ms.";
-		}
-		
-		LOG(ERROR) << "Average Forward pass: " << forward_time / 1000. /
-		(FLAGS_iterations - 1) << " ms.";
-		LOG(ERROR) << "Average Backward pass: " << backward_time / 1000. /
-		(FLAGS_iterations - 1) << " ms.";
-		LOG(ERROR) << "Average Forward-Backward: " << total_timer.MilliSeconds() /
-		(FLAGS_iterations - 1) << " ms.";
-		LOG(ERROR) << "Total Time: " << total_timer.MilliSeconds() << " ms.";
-		LOG(ERROR) << "*** Benchmark ends ***";
-		exit(0);
-	}
+    LOG(ERROR) << "##################### Iteration : " << iter_cnt;
+    if (iter_cnt == FLAGS_iterations) {
+      LOG(ERROR) << "Average time per layer: ";
+      for (int i = 0; i < layers_.size(); ++i) {
+        const caffe::string& layername = layers_[i]->layer_param().name();
+        LOG(ERROR) << std::setfill(' ') << std::setw(10) << layername
+                   << "\tforward: " << forward_time_per_layer[i] / 1000. / FLAGS_iterations << " ms.";
+        LOG(ERROR) << std::setfill(' ') << std::setw(10) << layername
+                   << "\tbackward: " << backward_time_per_layer[i] / 1000.0 / FLAGS_iterations << " ms.";
+      }
+
+      LOG(ERROR) << "Average Forward pass: " << forward_time / 1000. / (FLAGS_iterations - 1) << " ms.";
+      LOG(ERROR) << "Average Backward pass: " << backward_time / 1000. / (FLAGS_iterations - 1) << " ms.";
+      LOG(ERROR) << "Average Forward-Backward: " << total_timer.MilliSeconds() / (FLAGS_iterations - 1) << " ms.";
+      LOG(ERROR) << "Total Time: " << total_timer.MilliSeconds() << " ms.";
+      LOG(ERROR) << "*** Benchmark ends ***";
+      exit(0);
+    }
   }
 }
 

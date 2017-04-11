@@ -252,54 +252,51 @@ void MKLSplitLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
 
 #if DUMP_LAYER_IO
-  if (1) {
-    LOG(ERROR) << this->layer_param_.name();
-    FILE *fp = NULL;
-    char dump_name[256] = {0};
-    std::string layer_name = boost::replace_all_copy(this->layer_param().name(), "/", "-");
-#if 1
-   // print top diff
-   sprintf(dump_name, "./%s_mkl_top_diff.txt", layer_name.c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < 1; n++) {
-     for (int c = 0; c < 1; c++) {
-       for (int h = 0; h < 1; h++) {
-         for (int w = 0; w < 1; w++) {
-            fprintf(fp, "%f, ", top[0]->diff_at(n, c, h, w));
-         }
-       }
-     }
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
+  LOG(ERROR) << this->layer_param_.name();
+  FILE *fp = NULL;
+  char dump_name[256] = {0};
+  std::string layer_name = boost::replace_all_copy(this->layer_param().name(), "/", "-");
+  
+  // top diff
+  sprintf(dump_name, "./%s_mkl_top_diff.txt", layer_name.c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < 1; n++) {
+    for (int c = 0; c < 1; c++) {
+      for (int h = 0; h < 1; h++) {
+        for (int w = 0; w < 1; w++) {
+           fprintf(fp, "%f, ", top[0]->diff_at(n, c, h, w));
+        }
+      }
+    }
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
 
-#if 1
-   // print bottom diff
-   sprintf(dump_name, "./%s_mkl_bottom_diff.txt", layer_name.c_str());
-   fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < 1; n++) {
-     for (int c = 0; c < 1; c++) {
-       for (int h = 0; h < 1; h++) {
-         for (int w = 0; w < 1; w++) {
-            fprintf(fp, "%f, ", bottom[0]->diff_at(n, c, h, w));
-         }
-       }
-     }
-   }
-   fprintf(fp, "\n");
-   fclose(fp);
-   fp = NULL;
-#endif
-   if (isnan(top[0]->diff_at(0, 0, 0, 0)) || top[0]->diff_at(0, 0, 0, 0) > 1000 || top[0]->diff_at(0, 0, 0, 0) < -1000) {
-     LOG(ERROR) << "top diff abnormal";
-     exit(-1);
-   }
-   if (isnan(bottom[0]->diff_at(0, 0, 0, 0)) || bottom[0]->diff_at(0, 0, 0, 0) > 1000 || bottom[0]->diff_at(0, 0, 0, 0) < -1000) {
-     LOG(ERROR) << "bottom diff abnormal";
-     exit(-1);
-   }
+  // bottom diff
+  sprintf(dump_name, "./%s_mkl_bottom_diff.txt", layer_name.c_str());
+  fp = fopen(dump_name, "ab+");
+  for (int n = 0; n < 1; n++) {
+    for (int c = 0; c < 1; c++) {
+      for (int h = 0; h < 1; h++) {
+        for (int w = 0; w < 1; w++) {
+           fprintf(fp, "%f, ", bottom[0]->diff_at(n, c, h, w));
+        }
+      }
+    }
+  }
+  fprintf(fp, "\n");
+  fclose(fp);
+  fp = NULL;
+
+  if (isnan(top[0]->diff_at(0, 0, 0, 0)) || top[0]->diff_at(0, 0, 0, 0) > 1000 || top[0]->diff_at(0, 0, 0, 0) < -1000) {
+    LOG(ERROR) << "top diff abnormal";
+    exit(-1);
+  }
+
+  if (isnan(bottom[0]->diff_at(0, 0, 0, 0)) || bottom[0]->diff_at(0, 0, 0, 0) > 1000 || bottom[0]->diff_at(0, 0, 0, 0) < -1000) {
+    LOG(ERROR) << "bottom diff abnormal";
+    exit(-1);
   }
 #endif
 

@@ -124,28 +124,39 @@ void SoftmaxLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       Dtype max_val = bottom_data[i * dim + k];
       for (int j = 1; j < channels; j++) {
         Dtype value = bottom_data[i * dim + k + j * inner_num_];
-        if (max_val < value) max_val = value;
+        if (max_val < value) {
+          max_val = value;
+        }
       }
       scale_data[k] = max_val;
     }
+
+# if 0
+    for (int k = 0; k < inner_num_; k++) {
+      if (isnan(scale_data[k])) {
+        LOG(FATAL) << "scale_data is nan";
+      }
+    }
+#endif
+
     // subtraction
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels, inner_num_,
-        1, -1., sum_multiplier_.cpu_data(), scale_data, 1., top_data);
+                          1, -1., sum_multiplier_.cpu_data(), scale_data, 1., top_data);
     // exponentiation
     // FIXME_valgrind: caffe_exp<Dtype>(dim, top_data, top_data);
     caffe_exp<Dtype>(dim, top_data, top_data);
     // sum after exp
     caffe_cpu_gemv<Dtype>(CblasTrans, channels, inner_num_, 1.,
-        top_data, sum_multiplier_.cpu_data(), 0., scale_data);
+                          top_data, sum_multiplier_.cpu_data(), 0., scale_data);
     // division
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
     for (int j = 0; j < channels; j++) {
-      caffe_div(inner_num_, top_data + j*inner_num_, scale_data,
-              top_data + j*inner_num_);
+      caffe_div(inner_num_, top_data + j * inner_num_, scale_data,
+                top_data + j * inner_num_);
     }
-    top_data += channels*inner_num_;
+    top_data += channels * inner_num_;
   }
 }
 
