@@ -1453,8 +1453,8 @@ message PoolingParameter {
   optional uint32 pad_w = 6 [default = 0]; // The padding width (2D only)
   optional uint32 kernel_h = 7; // The kernel height (2D only)
   optional uint32 kernel_w = 8; // The kernel width (2D only)
-  optional uint32 stride_h = 9; // The stride height (2D only)
-  optional uint32 stride_w = 10; // The stride width (2D only)
+  optional uint32 stride_h = 9 [default = 1]; // The stride height (2D only)
+  optional uint32 stride_w = 10 [default = 1]; // The stride width (2D only)
   enum Engine {
     DEFAULT = 0;
     CAFFE = 1;
