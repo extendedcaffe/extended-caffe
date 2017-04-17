@@ -609,8 +609,8 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    // print mean
    sprintf(dump_name, "./%s_mkl_mean_bwd.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < mean_.count(); n++) {
-      fprintf(fp, "%f, ", mean_.cpu_data()[n]);
+   for (int n = 0; n < channels_; n++) {
+      fprintf(fp, "%f, ", mean_buffer_[n]);
    }
    fprintf(fp, "\n");
    fclose(fp);
@@ -619,8 +619,8 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    // print variance
    sprintf(dump_name, "./%s_mkl_variance_bwd.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
-   for (int n = 0; n < variance_.count(); n++) {
-      fprintf(fp, "%f, ", variance_.cpu_data()[n]);
+   for (int n = 0; n < channels_; n++) {
+      fprintf(fp, "%f, ", variance_buffer_[n]);
    }
    fprintf(fp, "\n");
    fclose(fp);
@@ -640,7 +640,7 @@ void MKLBatchNormLayer<Dtype>::Backward_cpu(
    sprintf(dump_name, "./%s_mkl_scaleshift_diff.txt", this->layer_param_.name().c_str());
    fp = fopen(dump_name, "ab+");
    for (int n = 0; n < channels_ * 2; n++) {
-      fprintf(fp, "%f, ", scaleShift_diff_[n]);
+      fprintf(fp, "%f, ", diffScaleShift_buffer_[n]);
    }
    fprintf(fp, "\n");
    fclose(fp);

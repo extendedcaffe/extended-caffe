@@ -239,11 +239,11 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
   char dump_name[256] = {0};
 
   // weights
-  if (weights) {
+  if (bottom.size() == 3) {
     sprintf(dump_name, "./softmax_loss_weights.txt");
     fp = fopen(dump_name, "wb+");
     for (int i = 0 ; i < outer_num_ * inner_num_; i++) {
-       fprintf(fp, "%f, ", weights[i]);
+       fprintf(fp, "%f, ", bottom[2]->cpu_data()[i]);
     }
     fprintf(fp, "\n");
     fclose(fp);
