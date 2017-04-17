@@ -106,7 +106,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       }
       CHECK_GT(kernel_h_, 0) << "Filter dimensions cannot be zero.";
       CHECK_GT(kernel_w_, 0) << "Filter dimensions cannot be zero.";
-      if (!pool_param.has_pad_h()) {
+      if (pool_param.pad_size() > 0) {
           CHECK(pool_param.pad_size() == 1 || pool_param.pad_size() == 2)
               << "pad must be specified once, or 2 values for Height and Width";
           if (pool_param.pad_size() == 1) {
@@ -119,7 +119,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         pad_h_ = pool_param.pad_h();
         pad_w_ = pool_param.pad_w();
       }
-      if (!pool_param.has_stride_h()) {
+      if (pool_param.stride_size() > 0) {
           CHECK(pool_param.stride_size() == 1 || pool_param.stride_size() == 2)
               << "stride must be specified once, or 2 values for Height and Width";
           if (pool_param.stride_size() == 1) {

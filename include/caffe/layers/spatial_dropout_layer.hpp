@@ -75,7 +75,7 @@ class SpatialDropoutLayer : public NeuronLayer<Dtype> {
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "Dropout"; }
+  virtual inline const char* type() const { return "SpatialDropout"; }
 
  protected:
   /**

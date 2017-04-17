@@ -313,7 +313,7 @@ TEST_F(CPUBBoxUtilTest, TestOutputBBox) {
   OutputBBox(bbox, img_size, has_resize, resize_param, &out_bbox);
   CHECK_EQ(out_bbox.xmin(), 0.);
   CHECK_EQ(out_bbox.ymin(), 150.);
-  CHECK_EQ(out_bbox.xmax(), 50.);
+  ASSERT_FLOAT_EQ(out_bbox.xmax(), 50);
   CHECK_EQ(out_bbox.ymax(), 250.);
 }
 
