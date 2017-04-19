@@ -204,9 +204,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
 
 #ifdef CPU_ONLY
     // special handling for some layers
-    if (!layer_param.name().compare("rfcn_cls") ||
-        (!layer_param.type().compare("Concat") && has_intel_knl_feature)
-       ) {
+    if (!layer_param.type().compare("Concat") && has_intel_knl_feature) {
            // LOG(ERROR) << layer_param.name() << " use CAFFE Engine";
            param.mutable_layer(layer_id)->set_engine("CAFFE");
       }

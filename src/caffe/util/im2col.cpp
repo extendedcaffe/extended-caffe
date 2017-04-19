@@ -382,34 +382,35 @@ void col2im3d_cpu(const Dtype* data_col, const int channels,
   long depth_col = (depth + 2 * pad_d - dil_patch_d) / stride_d + 1;
   long num_kernels = channels * height * width * depth;
   long chunk_len = kernel_h * kernel_w * kernel_d;
-  long len_col = depth_col * height_col * width_col;
 
   caffe_set(num_kernels, Dtype(0), data_im);
 
   #ifdef _OPENMP
   #pragma omp parallel for if (channels > 1)
   #endif
-  for (long idx = 0; idx < channels; ++idx) {
-    for (long c = idx * chunk_len; c < chunk_len * (idx + 1); ++c) {
+  for (long c_im = 0; c_im < channels; ++c_im) {
+    for (long c = c_im * chunk_len; c < chunk_len * (c_im + 1); ++c) {
       long w_offset = c % kernel_w;
       long h_offset = (c / kernel_w) % kernel_h;
       long d_offset = (c / kernel_w / kernel_h) % kernel_d;
-      long c_im = c / kernel_h / kernel_w / kernel_d;
-      
-      for (long k = 0; k < len_col; ++k) {
-        long d = k / height_col / width_col;
-        long h = (k / width_col) % height_col;
-        long w = k % width_col;
+ 
+      long dc0 = d_offset * dilation_d - pad_d;
+      long hc0 = h_offset * dilation_h - pad_h;
+      long wc0 = w_offset * dilation_w - pad_w;
+      for (long d = 0; d < depth_col; ++d) {
+        long d_pad = d * stride_d + dc0;
+        for (long h = 0; h < height_col; ++h) {
+          long h_pad = h * stride_h + hc0;
+          for (long w = 0; w < width_col; ++w) {
+            long w_pad = w * stride_w + wc0;
 
-        long d_pad = d * stride_d - pad_d + d_offset * dilation_d;
-        long h_pad = h * stride_h - pad_h + h_offset * dilation_h;
-        long w_pad = w * stride_w - pad_w + w_offset * dilation_w;
-
-        if (((unsigned long)h_pad < (unsigned long)height) &&
-          ((unsigned long)w_pad < (unsigned long)width) &&
-          ((unsigned long)d_pad < (unsigned long)depth)) {
-          data_im[((c_im * depth + d_pad) * height + h_pad) * width + w_pad] +=
-            data_col[((c * depth_col + d) * height_col + h) * width_col + w];
+            if (((unsigned long)h_pad < (unsigned long)height) &&
+                ((unsigned long)w_pad < (unsigned long)width) &&
+                ((unsigned long)d_pad < (unsigned long)depth)) {
+              data_im[((c_im * depth + d_pad) * height + h_pad) * width + w_pad] +=
+                data_col[((c * depth_col + d) * height_col + h) * width_col + w];
+            }
+          }
         }
       }
     }

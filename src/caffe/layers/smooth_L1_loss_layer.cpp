@@ -80,6 +80,7 @@ void SmoothL1LossLayer<Dtype>::Reshape(
       bottom[0]->height(), bottom[0]->width());
   errors_.Reshape(bottom[0]->num(), bottom[0]->channels(),
       bottom[0]->height(), bottom[0]->width());
+
   // vector of ones used to sum
   ones_.Reshape(bottom[0]->num(), bottom[0]->channels(),
       bottom[0]->height(), bottom[0]->width());
@@ -97,17 +98,15 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
         // apply "inside" weights
         caffe_mul(count, bottom[2]->cpu_data(), diff_.cpu_data(), diff_.mutable_cpu_data());  // d := w_in * (b0 - b1)
     }
-// #ifdef _OPENMP
-// #pragma omp parallel for
-// #endif
-    for(int index = 0; index < count; index++) {
-        Dtype val = diff_.cpu_data()[index];
+
+    for(int i = 0; i < count; i++) {
+        Dtype val = diff_.cpu_data()[i];
         Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
-           errors_.mutable_cpu_data()[index] = 0.5 * val * val * sigma2_;
+           errors_.mutable_cpu_data()[i] = 0.5 * val * val * sigma2_;
         } 
         else {
-           errors_.mutable_cpu_data()[index] = abs_val - 0.5 / sigma2_;
+           errors_.mutable_cpu_data()[i] = abs_val - 0.5 / sigma2_;
         }
     }
     if (has_weights_) {
@@ -126,19 +125,16 @@ void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, con
     // after forwards, diff_ holds w_in * (b0 - b1)
     int count = diff_.count();
     
-// #ifdef _OPENMP
-//    #pragma omp parallel for
-// #endif
-    for (int index = 0; index < count; index++) {
+    for (int i = 0; i < count; i++) {
         // f'(x) = sigma * sigma * x         if |x| < 1 / sigma / sigma
         //       = sign(x)                   otherwise
-        Dtype val = diff_.cpu_data()[index];
+        Dtype val = diff_.cpu_data()[i];
         Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
-          diff_.mutable_cpu_data()[index] = sigma2_ * val;
+          diff_.mutable_cpu_data()[i] = sigma2_ * val;
         } 
         else {
-          diff_.mutable_cpu_data()[index] = (Dtype(0) < val) - (val < Dtype(0));
+          diff_.mutable_cpu_data()[i] = (Dtype(0) < val) - (val < Dtype(0));
         }
     }
 
