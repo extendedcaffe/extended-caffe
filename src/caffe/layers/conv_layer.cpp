@@ -77,7 +77,9 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     Dtype* top_data = top[i]->mutable_cpu_data();
 #ifdef _OPENMP
     #pragma omp parallel if(this->num_of_threads_ > 1) num_threads(this->num_of_threads_)
+#endif
     {
+#ifdef _OPENMP
       #pragma omp for
 #endif
       for (int n = 0; n < this->num_; ++n) {
@@ -89,9 +91,7 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           this->forward_cpu_bias(top_data + n * this->top_dim_, bias);
         }
       }
-#ifdef _OPENMP
     }
-#endif
   }
 
   // dump conv output

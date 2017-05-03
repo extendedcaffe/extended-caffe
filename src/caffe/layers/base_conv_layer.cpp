@@ -361,11 +361,11 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
   }
   tid = tid % num_of_threads_;  //  just to be sure
 #endif
-  int col_data_buffer_size = col_buffer_mt_.size()/num_of_threads_;
+  int col_data_buffer_size = col_buffer_mt_.size() / num_of_threads_;
 
   Dtype* col_buff = const_cast<Dtype*>(input);
   if (!is_1x1_) {
-    col_buff = & col_buffer_mt_[ tid* col_data_buffer_size];
+    col_buff = & col_buffer_mt_[tid * col_data_buffer_size];
     if (!skip_im2col) {
       conv_im2col_cpu(input, col_buff);
     }
@@ -401,8 +401,8 @@ void BaseConvolutionLayer<Dtype>::backward_cpu_gemm(const Dtype* output,
   tid = tid % num_of_threads_;  //  just to be sure
 #endif
 
-  int col_data_buffer_size = col_buffer_mt_.size()/num_of_threads_;
-  Dtype* col_buff = & col_buffer_mt_[ tid* col_data_buffer_size];
+  int col_data_buffer_size = col_buffer_mt_.size() / num_of_threads_;
+  Dtype* col_buff = &col_buffer_mt_[tid * col_data_buffer_size];
 
   if (is_1x1_) {
     col_buff = input;
@@ -431,7 +431,7 @@ void BaseConvolutionLayer<Dtype>::clear_weight_mt(void) {
 
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::sum_weight_mt(Dtype* weight_diff) {
-  unsigned int weight_diff_size =  weight_diff_mt_.size() / num_of_threads_;
+  unsigned int weight_diff_size = weight_diff_mt_.size() / num_of_threads_;
   unsigned int col_per_thread = weight_diff_size/num_of_threads_;
   int tid = 0;
 #ifdef _OPENMP
@@ -441,8 +441,8 @@ void BaseConvolutionLayer<Dtype>::sum_weight_mt(Dtype* weight_diff) {
 #endif
     for (unsigned int j = 0; j < col_per_thread; ++j) {
       for (unsigned int t = 0; t < num_of_threads_ ; ++t) {
-          weight_diff[tid*col_per_thread + j] +=
-            weight_diff_mt_[t*weight_diff_size + tid*col_per_thread + j];
+          weight_diff[tid * col_per_thread + j] +=
+            weight_diff_mt_[t * weight_diff_size + tid * col_per_thread + j];
       }
     }
 
@@ -465,16 +465,15 @@ void BaseConvolutionLayer<Dtype>::weight_cpu_gemm(const Dtype* input,
                << " > OMP_num_THREADS = " << num_of_threads_;
   }
   tid = tid % num_of_threads_;  //  just to be sure
-  Dtype* weight_diff_data =
-    & weight_diff_mt_[tid * (weight_diff_mt_.size()/num_of_threads_)];
+  Dtype* weight_diff_data = &weight_diff_mt_[tid * (weight_diff_mt_.size() / num_of_threads_)];
 #else
   Dtype* weight_diff_data = weights;
 #endif
   Dtype* col_buff = const_cast<Dtype*>(input);
 
   if (!is_1x1_) {
-    int col_data_buffer_size = col_buffer_mt_.size()/num_of_threads_;
-    col_buff = & col_buffer_mt_[ tid* col_data_buffer_size];
+    int col_data_buffer_size = col_buffer_mt_.size() / num_of_threads_;
+    col_buff = &col_buffer_mt_[tid * col_data_buffer_size];
     conv_im2col_cpu(input, col_buff);
   }
 
