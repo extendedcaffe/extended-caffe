@@ -1,5 +1,10 @@
 # Add-on Notes
-This branch of Caffe extend [Microsoft Caffe](http://github.com/Microsoft/caffe) by integrating [MKL DNN API accelerations](http://github.com/intel/caffe) and doing many extra OpenMP/Zero-Copy optimizations to make py-RFCN fasterin Intel platform. We also implemented the CPU version of some layers(like PSROI, box annotator etc.). We can get 20x acceleration compared with Vanilla CPU Caffe in Pascal-VOC RFCN end2end case in Xeon E5 2699-v4.
+## How to build
+ 1. fill your_project_path of BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
+ 2. make clean
+ 3. unset MKLROOT
+ 4. make -j<core_number>
+ 6. make pycaffe
 
 # Caffe
 [![Build Status](https://travis-ci.org/BVLC/caffe.svg?branch=master)](https://travis-ci.org/BVLC/caffe)
