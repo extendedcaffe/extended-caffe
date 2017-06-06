@@ -150,7 +150,7 @@ void MKLConvolutionLayer<Dtype>::Init(
   kh = this->kernel_h_;
 
   size_t bdata_sizes[4] = {iw, ih, ic, n};
-  size_t bdata_strides[4] = {1, iw, iw*ih, iw*ih*ic};
+  size_t bdata_strides[4] = {1, iw, iw * ih, iw * ih * ic};
 
   /* starting with MKL 2017 Gold in case of groups filter layout
    * becomes 5D, i.e. groups become a separate dimension */
@@ -161,14 +161,14 @@ void MKLConvolutionLayer<Dtype>::Init(
       f_dimension = dimension;
   }
 
-  size_t fdata_sizes[5] = {kw, kh, ic/g, oc/g_mkl2017, g_mkl2017};
-  size_t fdata_strides[5]  = {1, kw, kw*kh, kw*kh*ic/g, kw*kh*ic/g*oc/g};
+  size_t fdata_sizes[5] = {kw, kh, ic / g, oc / g_mkl2017, g_mkl2017};
+  size_t fdata_strides[5]  = {1, kw, kw * kh, kw * kh * ic / g, kw * kh * ic / g * oc / g};
 
   size_t bias_sizes[1] = {oc};
   size_t bias_strides[1] = {1};
 
   size_t tdata_sizes[4] = {ow, oh, oc, n};
-  size_t tdata_strides[4]  = {1, ow, ow*oh, ow*oh*oc};
+  size_t tdata_strides[4]  = {1, ow, ow * oh, ow * oh * oc};
 
   size_t convolutionStrides[2] = {this->stride_w_, this->stride_h_};
   int    inputOffset[2] = {-this->pad_w_, -this->pad_h_};

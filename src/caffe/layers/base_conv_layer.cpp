@@ -398,7 +398,7 @@ void BaseConvolutionLayer<Dtype>::backward_cpu_gemm(const Dtype* output,
     LOG(FATAL) << "ConvLayer::backward_cpu_gemm: omp_thread_num() =" << tid
                << " > OMP_num_THREADS = " << num_of_threads_;
   }
-  tid = tid % num_of_threads_;  //  just to be sure
+  tid = tid % num_of_threads_;  // just to be sure
 #endif
 
   size_t col_data_buffer_size = col_buffer_mt_.size() / num_of_threads_;
@@ -446,7 +446,7 @@ void BaseConvolutionLayer<Dtype>::sum_weight_mt(Dtype* weight_diff) {
       }
     }
 
-    size_t j = col_per_thread*num_of_threads_ + tid;
+    size_t j = col_per_thread * num_of_threads_ + tid;
     if (j < weight_diff_size) {
       for (size_t t = 0; t < num_of_threads_ ; ++t) {
         weight_diff[j] += weight_diff_mt_[t * weight_diff_size + j];
@@ -459,13 +459,18 @@ void BaseConvolutionLayer<Dtype>::weight_cpu_gemm(const Dtype* input,
     const Dtype* output, Dtype* weights) {
   int tid = 0;
 #ifdef _OPENMP
-  tid = omp_get_thread_num();
-  if (tid >= num_of_threads_) {
-    LOG(FATAL) << "ConvLayer::weights_cpu_gemm: omp_thread_num() =" << tid
-               << " > OMP_num_THREADS = " << num_of_threads_;
+  Dtype* weight_diff_data = NULL;
+  if (num_of_threads_ > 1) {
+    tid = omp_get_thread_num();
+    if (tid >= num_of_threads_) {
+      LOG(FATAL) << "ConvLayer::weights_cpu_gemm: omp_thread_num() =" << tid
+                 << " > OMP_num_THREADS = " << num_of_threads_;
+    }
+    tid = tid % num_of_threads_;  // just to be sure
+    weight_diff_data = &weight_diff_mt_[tid * (weight_diff_mt_.size() / num_of_threads_)];
+  } else {
+    weight_diff_data = weights; 
   }
-  tid = tid % num_of_threads_;  // just to be sure
-  Dtype* weight_diff_data = &weight_diff_mt_[tid * (weight_diff_mt_.size() / num_of_threads_)];
 #else
   Dtype* weight_diff_data = weights;
 #endif

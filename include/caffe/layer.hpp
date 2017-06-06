@@ -141,11 +141,11 @@ public:
 
   /*************** MLSL ***************/
 
-	MLSL::ComputeOp *layerOp;
-	vector<MLSL::ComputeOp*> prevLayerOps;
-	vector<Layer<Dtype>*> prevLayers;
+  MLSL::ComputeOp *layerOp;
+  vector<MLSL::ComputeOp*> prevLayerOps;
+  vector<Layer<Dtype>*> prevLayers;
 
-	vector<int> ifm2ofm_map;
+  vector<int> ifm2ofm_map;
   std::vector<uint32_t> bottom_sizes;
 
   vector<Blob<Dtype>* > bottom_vec;
