@@ -433,7 +433,7 @@ static void bernoulli_generate(long n, double p, int* r) {
     (n >= threshold);
   if (!run_parallel) nthr = 1;
 
-# pragma omp parallel num_threads(nthr)
+#pragma omp parallel num_threads(nthr)
   {
     const int ithr = omp_get_thread_num();
     const long avg_amount = (n + nthr - 1) / nthr;

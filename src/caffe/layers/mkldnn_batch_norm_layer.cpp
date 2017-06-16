@@ -130,7 +130,12 @@ void MKLDNNBatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom
     this->num_ = bottom[0]->num();
     this->channels_ = bottom[0]->channels();
 
-    top[0]->Reshape(this->num_, this->channels_, this->height_, this->width_);
+    //Fix: should reshape the top blob with the real size of bottom blob
+    //top[0]->Reshape(this->num_, this->channels_, this->height_, this->width_);
+#ifdef DEBUG
+    LOG(INFO) << "size of bottom blob: " << bottom[0]->shape().size();
+#endif
+    top[0]->ReshapeLike(*bottom[0]);
 }
 
 template <typename Dtype>
@@ -242,6 +247,23 @@ void MKLDNNBatchNormLayer<Dtype>::InitBatchNorm(const vector<Blob<Dtype>*>& bott
 
     fwd_bottom_data->set_mkldnn_primitive(BatchNormFwd);
     fwd_top_data->set_mkldnn_primitive(BatchNormFwd);
+
+    //Fix: MKLDNN batch norm only support 4D memory descriptor! Use 4D for calculation and reshape to 2D for output!
+    bool has_spatial = (bottom[0]->shape().size() != 2);
+#ifdef DEBUG
+    LOG(INFO) << "has_spatial flag value: " << has_spatial;
+#endif
+    if (has_spatial == false)
+    {
+#ifdef DEBUG
+        LOG(INFO) << "size of bottom blob: " << bottom[0]->shape().size();
+        LOG(INFO) << "MKLDNN batch norm only support 4D memory descriptor! Use 4D for calculation and reshape to 2D for output!";
+#endif
+        vector<int> top_shape;
+        top_shape.push_back(bottom[0]->num());
+        top_shape.push_back(bottom[0]->channels());
+        top[0]->Reshape(top_shape);
+    }
 }
 
 
@@ -250,8 +272,11 @@ void MKLDNNBatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
                                         ,const vector<Blob<Dtype>*>& top)
 {
     VLOG(1) << "MKLDNNBatchNormLayer<Dtype>::Forward_cpu: " << this->layer_param_.name();
+#ifdef DEBUG
+    LOG(INFO) << "MKLDNNBatchNormLayer<Dtype>::Forward_cpu: " << this->layer_param_.name();
+#endif
 
-    if( BatchNormFwd_pd == NULL)
+    if(BatchNormFwd_pd == NULL)
         InitBatchNorm(bottom, top);
     // making reorders if needed.
     fwd_bottom_data->sync_before_read();
@@ -280,7 +305,10 @@ void MKLDNNBatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
         }
     }
 
+    PERFORMANCE_EVENT_ID_INIT(perf_id_fw_, PERFORMANCE_MKLDNN_NAME("FW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
     BatchNormFwd.submit();
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
 
     if (this->phase_ == TRAIN && !use_global_stats_) {
         // compute and save moving average
@@ -389,16 +417,53 @@ template <typename Dtype>
 void MKLDNNBatchNormLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom)
 {
-    VLOG(1) << "MKLDNNBatchNormLayer<Dtype>::Backward_cpu: "
-        << this->layer_param_.name();
+    VLOG(1) << "MKLDNNBatchNormLayer<Dtype>::Backward_cpu: " << this->layer_param_.name();
+#ifdef DEBUG
+    LOG(INFO) << "MKLDNNBatchNormLayer<Dtype>::Backward_cpu: " << this->layer_param_.name();
+#endif
 
-    if (BatchNormBwd_pd == NULL) InitBatchNormBwd(top, propagate_down, bottom);
+    if (BatchNormBwd_pd == NULL)
+        InitBatchNormBwd(top, propagate_down, bottom);
     // making reorders if needed.
     bwd_top_diff->sync_before_read();
     // update bottom that head at prv
     bwd_bottom_diff->sync_before_write();
 
+    PERFORMANCE_EVENT_ID_INIT(perf_id_bw_, PERFORMANCE_MKLDNN_NAME("BW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
+#ifdef DEBUG
+    if (bottom[0]->prv_data() != NULL)
+    {
+        LOG(INFO) << "Debug: Bottom prv data: " << *bottom[0]->prv_data();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Bottom prv data is NULL!";
+    }
+
+    if (top[0]->prv_diff() != NULL)
+    {
+        LOG(INFO) << "Debug: Top prv diff: " << *top[0]->prv_diff();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Top prv diff is NULL!";
+        LOG(INFO) << "Debug: Top cpu diff: " << *top[0]->cpu_diff();
+    }
+#endif
     BatchNormBwd.submit();
+#ifdef DEBUG
+    if (bottom[0]->prv_diff() != NULL)
+    {
+        LOG(INFO) << "Debug: Bottom prv diff: " << *bottom[0]->prv_diff();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Bottom prv diff is NULL!";
+        LOG(INFO) << "Debug: Bottom cpu diff: " << *bottom[0]->cpu_diff();
+    }
+#endif
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_);
 
     /* FIXME: this wouldn't work with lazy stream */
     if (use_weight_bias_) {

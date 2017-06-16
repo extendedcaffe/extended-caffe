@@ -42,10 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "caffe/layers/dropout_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 
-#ifdef USE_MLSL
-using namespace MLSL;
-#endif /* USE_MLSL */
-
 namespace caffe {
 
 template <typename Dtype>
@@ -57,27 +53,6 @@ void DropoutLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   DCHECK(threshold_ < 1.);
   scale_ = 1. / (1. - threshold_);
   uint_thres_ = static_cast<unsigned int>(UINT_MAX * threshold_);
-
-#ifdef USE_MLSL
-  int ic = bottom[0]->channels();
-  int iw = bottom[0]->width();
-  int ih = bottom[0]->height();
-  int oc = ic; //top[0]->channels();
-  int ow = iw; //top[0]->width();
-  int oh = ih; //top[0]->height();
-
-  DataType dt = (sizeof(Dtype) == 4)? DT_FLOAT : DT_DOUBLE;
-	ComputeOpRegInfo *myRegInfo;
-	myRegInfo = new ComputeOpRegInfo(COMP_OP_TYPE_ACT);
-        myRegInfo->SetName(this->layer_param_.name().c_str());
-	myRegInfo->AddInputFeatureMap(ic, iw*ih, dt);
-	myRegInfo->AddOutputFeatureMap(oc, ow*oh, dt);
-
-  myRegInfo->Validate();
-	this->layerOp = new ComputeOp(myRegInfo, caffe::internode::data_parallelism);
-  delete myRegInfo;
-#endif
-  
 }
 
 template <typename Dtype>
@@ -94,6 +69,15 @@ void DropoutLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
+  // below line designated to set correspondent SyncedMemory->_head to HEAD_AT_CPU
+  // Fix the issue of "Check failed: this->_cpu_ptr == cpu_ptr (0 vs. 0x5587dfc87ec0)" (GoogleNet V1)
+  // The reason is after pooling layer: MKLDNNPoolingLayer<Dtype>::Forward_cpu: pool5/7x7_s1, the top[0]->prv_data() has value
+  // It will convert to cpu data in the dropout layer, and set the _head to HEAD_AT_CPU after executing top[0]->mutable_cpu_data()
+  // Howerver, I found top[0]->cpu_data() and top[0]->prv_data() both has value
+  // So in the inner product layer: loss3/classifier, the data will convert from bottom prv data
+  // and the reorder will change from this->_reorder_usr2prv to this->_reorder_extprv2prv_pd
+  // So eventually trigger the assertion.
+  top[0]->set_prv_data_descriptor(NULL);
   unsigned int* mask = rand_vec_.mutable_cpu_data();
   const int count = bottom[0]->count();
   if (this->phase_ == TRAIN) {

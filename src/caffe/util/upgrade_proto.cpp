@@ -50,7 +50,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "caffe/util/upgrade_proto.hpp"
 
 #ifdef USE_MLSL
-#include "mlsl.h"
+#include "caffe/multinode/mlsl.hpp"
 #endif /* USE_MLSL */
 
 namespace caffe {
@@ -1147,11 +1147,11 @@ void ReadSolverParamsFromTextFileOrDie(const string& param_file,
 
 #ifdef USE_MLSL
 static std::string getNodeId() {
-  return std::to_string(MLSL::GetNodeId());
+  return std::to_string(mn::get_node_id());
 }
 
 static std::string getNumNodes() {
-  return std::to_string(MLSL::GetNumNodes());
+  return std::to_string(mn::get_nodes_count());
 }
 
 void ReplaceMultinodeSolverParams(SolverParameter* param) {

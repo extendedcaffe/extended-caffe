@@ -195,37 +195,6 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
           << "parameters.";
     }
   }
-
-#ifdef USE_MLSL
-
-  if (!this->layerOp) {
-
-	int ic = bottom[0]->channels();
-	int iw = bottom[0]->width();
-	int ih = bottom[0]->height();
-
-	int oc = ic; //top[0]->channels();
-	int ow = iw; //top[0]->width();
-	int oh = ih; //top[0]->height();
-
-    DataType dt = (sizeof(Dtype) == 4)? DT_FLOAT : DT_DOUBLE;
-    ComputeOpRegInfo *myRegInfo;
-    myRegInfo = new ComputeOpRegInfo(COMP_OP_TYPE_ACT);
-    myRegInfo->SetName(this->layer_param_.name().c_str());
-    myRegInfo->AddInputFeatureMap(ic, iw*ih, dt);
-    myRegInfo->AddOutputFeatureMap(oc, ow*oh, dt);
-
-    /*for(int i = 0; i<this->blobs_.size(); i++)
-    {
-    	myRegInfo->AddWeights(1, this->blobs_[i].count(), dt, DISTRIBUTED_WEIGHT_UPDATE);
-    }*/
-
-    myRegInfo->Validate();
-    this->layerOp = new ComputeOp(myRegInfo, caffe::internode::data_parallelism);
-    delete myRegInfo;
-  }
-
-#endif /* USE_MLSL */
 }
 
 template <typename Dtype>
@@ -307,7 +276,7 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
        } else {
          e = dnnBatchNormalizationCreateBackward<Dtype>(
             &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
-         CHECK_EQ(e, E_SUCCESS); 
+         CHECK_EQ(e, E_SUCCESS);
        }
     }
   } else {
@@ -413,7 +382,7 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
     caffe_cpu_scale(this->blobs_[1]->count(), scale_factor,
                     this->blobs_[1]->cpu_data(), variance_buffer_);
   }
- 
+
   dnnError_t e;
   void* BatchNorm_res[dnnResourceNumber] = {NULL};
   BatchNorm_res[dnnResourceMean] = mean_buffer_;

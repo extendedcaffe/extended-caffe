@@ -46,10 +46,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "caffe/util/performance.hpp"
 #include "mkl_service.h"
 
-#ifdef USE_MLSL
-using namespace MLSL;
-#endif
-
 static int getMKLBuildDate() {
   static int build = 0;
   if (build == 0) {
@@ -219,29 +215,6 @@ void MKLConvolutionLayer<Dtype>::Init(
       dnnBorderZeros);
   }
 
-  // ---- Blobs Reshape -----------------------------------
-  // Initialize and fill the weights:
-  // output channels x input channels per-group x kernel height x kernel width
-  vector<int> weight_shape(2);
-  weight_shape[0] = oc;
-  weight_shape[1] = ic / g;
-  
-  for (int i = 0; i < this->num_spatial_axes_; ++i) {
-    weight_shape.push_back(this->kernel_shape_.cpu_data()[i]);
-  }
-  Blob<Dtype> tmpBlob(weight_shape);
-  caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(), tmpBlob.mutable_cpu_data());
-  this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
-  caffe_copy(tmpBlob.count(), tmpBlob.cpu_data(), this->blobs_[0]->mutable_cpu_data());
-  // If necessary, initialize and fill the biases.
-  if (this->bias_term_) {
-    vector<int> bias_shape(this->bias_term_, this->num_output_);
-	tmpBlob.Reshape(bias_shape);
-    caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->cpu_data(), tmpBlob.mutable_cpu_data());
-	  this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
-	  caffe_copy(tmpBlob.count(), tmpBlob.cpu_data(), this->blobs_[1]->mutable_cpu_data());
-  }
-
   CHECK_EQ(status, 0)
           << "Failed dnnCreateConvolution<Dtype>(dnnForward) with status "
           << status << "\n";
@@ -355,33 +328,15 @@ void MKLConvolutionLayer<Dtype>::Init(
   }
 
 #ifdef USE_MLSL
-
-  if (!this->layerOp) {
-    DataType dt = (sizeof(Dtype) == 4)? DT_FLOAT : DT_DOUBLE;
-    ComputeOpRegInfo *myRegInfo;
-    myRegInfo = new ComputeOpRegInfo(COMP_OP_TYPE_CC);
-    myRegInfo->SetName(this->layer_param_.name().c_str());
-    myRegInfo->AddInputFeatureMap(ic, iw*ih, dt);
-    myRegInfo->AddOutputFeatureMap(oc, ow*oh, dt);
-    myRegInfo->AddWeights(ic*oc/g, kw*kh, dt, DISTRIBUTED_WEIGHT_UPDATE);
-
+  if ((this->layerOp == nullptr) && (this->phase_ == TRAIN)) {
+    mn::OpRegInfo reg_info{mn::train::get_session(), MLSL::OT_CC};
+    reg_info.set_name(this->layer_param_.name());
+    reg_info.add_parameter_set<Dtype>(ic * oc / g, kw * kh);
     if (this->bias_term_) {
-      myRegInfo->AddWeights(oc, 1, dt, false /* no make sense to do distributed update for bias */);
+      reg_info.add_parameter_set<Dtype>(oc, 1);
     }
-
-    myRegInfo->Validate();
-    this->layerOp = new ComputeOp(myRegInfo, caffe::internode::data_parallelism);
-    delete myRegInfo;
-
-    for (int idx = 0; idx < this->blobs_.size(); idx++) {
-      LOG_LAYER(this) << "LayerSetUp: this->blobs_[idx]->count() " << this->blobs_[idx]->count();
-      LOG_LAYER(this) << "LayerSetUp: wt idx " << idx
-                      << ", local weight len " << this->layerOp->GetWeights(idx)->LocalLen() * this->layerOp->GetWeights(idx)->WTSize()
-                      << ", owned weight len " << this->layerOp->GetWeights(idx)->OwnedLen() * this->layerOp->GetWeights(idx)->WTSize()
-                      << ", wtsize " << this->layerOp->GetWeights(idx)->WTSize();
-    }
+    this->layerOp = mn::train::add_operation(reg_info);
   }
-
 #endif /* USE_MLSL */
 
 }
@@ -403,56 +358,12 @@ void MKLConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                        this->channels_ == bottom[0]->channels() &&
                        this->num_ == bottom[0]->num()) ? false : true;
 
-  BaseConvolutionLayer<Dtype>::Reshape(bottom, top);
+  BaseConvolutionLayer<Dtype>::ReshapeForMKL(bottom, top);
 
   if (reinitialize == true) {
     Init(bottom, top);
   }
 }
-
-#ifdef USE_MLSL
-
-template <typename Dtype>
-void MKLConvolutionLayer<Dtype>::pack_buffer(FeatureMap *fm, Dtype *to, const Dtype *from) {
-      for (int i = 0; i < fm->NumPackBlocks(); i++) {
-          BlockInfo * bi = fm->GetPackBlock(i);
-          int bMBLen = bi->MBLen();
-          int bMBStart = bi->MBStart();
-          int bFMLen = bi->FMLen();
-          int bFMStart = bi->FMStart();
-          Dtype *src = (Dtype*) from;
-          Dtype *dst = (Dtype*) (to + bi->BufOffset());
-          for (int mb = 0; mb < bMBLen; mb++) {
-              for (int fm = 0; fm < bFMLen; fm++) {
-                  for (int s = 0 ; s < bi->FMSize(); s++) {
-                    dst[(fm*bMBLen + mb)*bi->FMSize() + s] = src[s*bFMLen*bMBLen + (bFMStart+fm)*bMBLen + (bMBStart+mb)];
-                  }
-              }
-          }
-      }
-  }
-
-template <typename Dtype>
-void MKLConvolutionLayer<Dtype>::unpack_buffer(FeatureMap *fm, const Dtype *from, Dtype *to) {
-      for (int i = 0; i < fm->NumUnpackBlocks(); i++) {
-          BlockInfo * bi = fm->GetUnpackBlock(i);
-          int bMBLen = bi->MBLen();
-          int bMBStart = bi->MBStart();
-          int bFMLen = bi->FMLen();
-          int bFMStart = bi->FMStart();
-          Dtype *dst = (Dtype*) to;
-          Dtype *src = (Dtype*) (from + bi->BufOffset());
-          for (int mb = 0; mb < bMBLen; mb++) {
-              for (int fm = 0; fm < bFMLen; fm++) {
-                  for (int s = 0 ; s < bi->FMSize(); s++) {
-                    dst[s*bFMLen*bMBLen + (bFMStart+fm)*bMBLen + (bMBStart+mb)] = src[(fm*bMBLen + mb)*bi->FMSize() + s];
-                  }
-              }
-          }
-      }
-}
-
-#endif /* USE_MLSL */
 
 template <typename Dtype>
 void MKLConvolutionLayer<Dtype>::Forward_cpu(
@@ -637,10 +548,6 @@ void MKLConvolutionLayer<Dtype>::Backward_cpu(
     PERFORMANCE_MEASUREMENT_BEGIN();
     status = dnnExecute<Dtype>(convolutionBwdData, res_convolutionBwdData);
     PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_prop_);
-
-#ifdef USE_MLSL
-    this->on_delinp_ready(propagate_down);
-#endif /* USE_MLSL */
 
     CHECK_EQ(status, 0) << "Backward Data conv failed with status " << status;
   }

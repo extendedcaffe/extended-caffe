@@ -289,6 +289,10 @@ void MKLDNNPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
                                             ,const vector<Blob<Dtype>*>& top)
 {
     VLOG(1) << "MKLDNNPoolingLayer<Dtype>::Forward_cpu: " << this->layer_param_.name();
+#ifdef DEBUG
+    LOG(INFO) << "MKLDNNPoolingLayer<Dtype>::Forward_cpu: " << this->layer_param_.name();
+#endif
+
     if (NULL == poolingFwd_pd)
         InitPoolingFwd(bottom, top);
     // making reorders if needed.
@@ -296,7 +300,10 @@ void MKLDNNPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
     // update top that head at prv
     fwd_top_data->sync_before_write();
 
+    PERFORMANCE_EVENT_ID_INIT(perf_id_fw_, PERFORMANCE_MKLDNN_NAME("FW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
     poolingFwd.submit();
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
 }
 
 template <typename Dtype>
@@ -419,16 +426,54 @@ void MKLDNNPoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
                                             , const vector<Blob<Dtype>*>& bottom)
 {
     VLOG(1) << "MKLDNNPoolingLayer<Dtype>::Backward_cpu: " << this->layer_param_.name();
+#ifdef DEBUG
+    LOG(INFO) << "MKLDNNPoolingLayer<Dtype>::Backward_cpu: " << this->layer_param_.name();
+#endif
+
     if (!propagate_down[0]) {
         return;
     }
     if (NULL == poolingBwd_pd)
         InitPoolingBwd(top, propagate_down, bottom);
-    
+
     bwd_top_diff->sync_before_read();
     bwd_bottom_diff->sync_before_write();
 
-    poolingBwd.submit();  
+    PERFORMANCE_EVENT_ID_INIT(perf_id_bw_, PERFORMANCE_MKLDNN_NAME("BW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
+#ifdef DEBUG
+    if (bottom[0]->prv_data() != NULL)
+    {
+        LOG(INFO) << "Debug: Bottom prv data: " << *bottom[0]->prv_data();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Bottom prv data is NULL!";
+        //LOG(INFO) << "Debug: Bottom cpu data: " << *bottom[0]->cpu_data();
+    }
+
+    if (top[0]->prv_diff() != NULL)
+    {
+        LOG(INFO) << "Debug: Top prv diff: " << *top[0]->prv_diff();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Top prv diff is NULL!";
+        //LOG(INFO) << "Debug: Top cpu diff: " << *top[0]->cpu_diff();
+    }
+#endif
+    poolingBwd.submit();
+#ifdef DEBUG
+    if (bottom[0]->prv_diff() != NULL)
+    {
+        LOG(INFO) << "Debug: Bottom prv diff: " << *bottom[0]->prv_diff();
+    }
+    else
+    {
+        LOG(INFO) << "Debug: Bottom prv diff is NULL!";
+    }
+#endif
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_);
 }
 
 #ifdef CPU_ONLY

@@ -35,10 +35,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef USE_MLSL
-#include <mpi.h>
-#endif
-
 #include <algorithm>
 #include <functional>
 #include <vector>
@@ -76,37 +72,6 @@ void BatchNormLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                 this->blobs_[i]->mutable_cpu_data());
     }
   }
-
-#ifdef USE_MLSL
-
-  if (!this->layerOp) {
-
-	int ic = bottom[0]->channels();
-	int iw = bottom[0]->width();
-	int ih = bottom[0]->height();
-
-	int oc = ic; //top[0]->channels();
-	int ow = iw; //top[0]->width();
-	int oh = ih; //top[0]->height();
-
-    DataType dt = (sizeof(Dtype) == 4)? DT_FLOAT : DT_DOUBLE;
-    ComputeOpRegInfo *myRegInfo;
-    myRegInfo = new ComputeOpRegInfo(COMP_OP_TYPE_ACT);
-    myRegInfo->SetName(this->layer_param_.name().c_str());
-    myRegInfo->AddInputFeatureMap(ic, iw*ih, dt);
-    myRegInfo->AddOutputFeatureMap(oc, ow*oh, dt);
-
-    /*for(int i = 0; i<this->blobs_.size(); i++)
-    {
-    	myRegInfo->AddWeights(1, this->blobs_[i].count(), dt, DISTRIBUTED_WEIGHT_UPDATE);
-    }*/
-
-    myRegInfo->Validate();
-    this->layerOp = new ComputeOp(myRegInfo, caffe::internode::data_parallelism);
-    delete myRegInfo;
-  }
-
-#endif /* USE_MLSL */
 }
 
 template <typename Dtype>
@@ -192,7 +157,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   int num = bottom[0]->shape(0);
-  int spatial_dim = bottom[0]->count()/(bottom[0]->shape(0)*channels_);
+  int spatial_dim = bottom[0]->count() / (bottom[0]->shape(0) * channels_);
 
   if (bottom[0] != top[0]) {
     caffe_copy(bottom[0]->count(), bottom_data, top_data);
@@ -220,7 +185,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // subtract mean
   replicate_to_op(top_data,
                   num,
-                  spatial_dim*channels_,
+                  spatial_dim * channels_,
                   spatial_dim,
                   mean_.cpu_data(),
                   std::minus<Dtype>());
@@ -242,8 +207,8 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     this->blobs_[2]->mutable_cpu_data()[0] += 1;
     caffe_cpu_axpby(mean_.count(), Dtype(1), mean_.cpu_data(),
         moving_average_fraction_, this->blobs_[0]->mutable_cpu_data());
-    int m = bottom[0]->count()/channels_;
-    Dtype bias_correction_factor = m > 1 ? Dtype(m)/(m-1) : 1;
+    int m = bottom[0]->count() / channels_;
+    Dtype bias_correction_factor = m > 1 ? Dtype(m) / (m-1) : 1;
     caffe_cpu_axpby(variance_.count(), bias_correction_factor,
         variance_.cpu_data(), moving_average_fraction_,
         this->blobs_[1]->mutable_cpu_data());
@@ -264,8 +229,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   caffe_div(temp_.count(), top_data, temp_.cpu_data(), top_data);
   // TODO(cdoersch): The caching is only needed because later in-place layers
   //                 might clobber the data.  Can we skip this if they won't?
-  caffe_copy(x_norm_.count(), top_data,
-      x_norm_.mutable_cpu_data());
+  caffe_copy(x_norm_.count(), top_data, x_norm_.mutable_cpu_data());
 }
 
 template <typename Dtype>
@@ -286,7 +250,7 @@ void BatchNormLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   }
   const Dtype* top_data = x_norm_.cpu_data();
   int num = bottom[0]->shape()[0];
-  int spatial_dim = bottom[0]->count()/(bottom[0]->shape(0)*channels_);
+  int spatial_dim = bottom[0]->count() / (bottom[0]->shape(0) * channels_);
   // if Y = (X-mean(X))/(sqrt(var(X)+eps)), then
   //
   // dE(Y)/dX =

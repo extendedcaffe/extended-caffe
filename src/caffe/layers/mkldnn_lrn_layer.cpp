@@ -46,16 +46,18 @@ namespace caffe {
 
 template <typename Dtype>
 MKLDNNLRNLayer<Dtype>::MKLDNNLRNLayer(const LayerParameter& param)
-		: MKLDNNLayer<Dtype>(), Layer<Dtype>(param)
-		, fwd_bottom_data(NULL), fwd_top_data(NULL)
-		, bwd_bottom_diff(NULL), bwd_top_diff(NULL)
-		, lrnFwd_pd(NULL), lrnBwd_pd(NULL)
+        : MKLDNNLayer<Dtype>(), Layer<Dtype>(param)
+        , fwd_top_data(NULL), fwd_bottom_data(NULL)
+        , bwd_top_diff(NULL), bwd_bottom_diff(NULL)
+        , lrnFwd_pd(NULL), lrnBwd_pd(NULL)
 		, fwd_top_data_memory(NULL), bwd_bottom_diff_memory(NULL)
 		, scratch_memory(NULL)
 		, fwd_bottom_data_primitive(NULL), bwd_top_diff_primitive(NULL)
 		, alpha_(0), beta_(0), k_(0)
 		, size_(0), num_(0), width_(0), height_(0), channels_(0)
 {
+  PERFORMANCE_EVENT_ID_RESET(perf_id_fw_);
+  PERFORMANCE_EVENT_ID_RESET(perf_id_bw_);
 }
 
 template <typename Dtype>
@@ -136,7 +138,7 @@ void MKLDNNLRNLayer<Dtype>::InitLRNFwd(const vector<Blob<Dtype>*>& bottom, const
     memory::data_type mpcsn = memory::data_type::f32;
     // ---- Initialize memory descriptors -------------
     memory::dims tz = {n, ic, ih, iw};
-    shared_ptr<memory::desc> bottom_md, top_md;
+    shared_ptr<memory::desc> top_md;
     shared_ptr<memory::primitive_desc> usr_mpd, prv_mpd;
     if (bottom_data_is_prv) {
         shared_ptr<MKLDNNMemoryDescriptor<Dtype, false> > mem_descr
@@ -178,7 +180,6 @@ void MKLDNNLRNLayer<Dtype>::InitLRNFwd(const vector<Blob<Dtype>*>& bottom, const
 
     // ---- Create usr memory primitive descriptors -------------
     memory::format mfmt_nchw = memory::format::nchw;
-    memory::format scratch_mfmt = memory::format::nchw;
 
     shared_ptr<MemPD> usr_data_memory_pd(new MemPD({{tz}, mpcsn, mfmt_nchw}, cpu_engine));
 
@@ -214,7 +215,10 @@ void MKLDNNLRNLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
     // update top that head at prv
     fwd_top_data->sync_before_write();
 
+    PERFORMANCE_EVENT_ID_INIT(perf_id_fw_, PERFORMANCE_MKLDNN_NAME("FW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
     lrnFwd.submit();
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_fw_);
 }
 
 template <typename Dtype>
@@ -262,7 +266,7 @@ void MKLDNNLRNLayer<Dtype>::InitLRNBwd(const vector<Blob<Dtype>*>& top
     bottom_diff_md = top_diff_md;
 
     // ---- Initialize LRN primitive descriptor -------------
-    lrn_backward::desc lrnBwd_desc(lrn_algorithm, *bottom_diff_md, *top_diff_md,
+    lrn_backward::desc lrnBwd_desc(lrn_algorithm, *bottom_md, *top_diff_md,
                         size_, alpha_, beta_);
     // ---- Determining engine to use -----------------------
     std::string subengines = this->layer_param_.engine();
@@ -288,7 +292,6 @@ void MKLDNNLRNLayer<Dtype>::InitLRNBwd(const vector<Blob<Dtype>*>& top
 
     // ---- Create usr memory primitive descriptors -------------
     memory::format mfmt_nchw = memory::format::nchw;
-    memory::format scratch_mfmt = memory::format::nchw;
 
     shared_ptr<MemPD> usr_data_memory_pd(new MemPD({{tz}, mpcsn, mfmt_nchw}, cpu_engine));
 
@@ -320,7 +323,10 @@ void MKLDNNLRNLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
     bwd_top_diff->sync_before_read();
     bwd_bottom_diff->sync_before_write();
 
+    PERFORMANCE_EVENT_ID_INIT(perf_id_bw_, PERFORMANCE_MKLDNN_NAME("BW"));
+    PERFORMANCE_MEASUREMENT_BEGIN();
     lrnBwd.submit();
+    PERFORMANCE_MEASUREMENT_END_ID(perf_id_bw_);
 }
 
 #ifdef CPU_ONLY

@@ -55,11 +55,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "caffe/util/upgrade_proto.hpp"
 
 #include "caffe/util/benchmark.hpp"
-
-#ifdef USE_MLSL
-#include <mlsl.h>
-#include <mpi.h>
-#endif /* USE_MLSL */
+#include "caffe/multinode/mlsl.hpp"
 
 namespace caffe {
 
@@ -349,7 +345,6 @@ void Solver<Dtype>::Step(int iters) {
 #ifdef CAFFE_PER_LAYER_TIMINGS
       PrintTimers(false);
       ResetTimers();
-//      MLSL::print_mlsl_time();
 #endif
     }
 
@@ -367,7 +362,7 @@ void Solver<Dtype>::Step(int iters) {
     iter_time += iter_timer.MilliSeconds();
 
 #ifdef CAFFE_PER_LAYER_TIMINGS
-    if (MLSL::GetNodeId() == 0)
+    if (mn::get_node_id() == 0)
         LOG(INFO) << "iter " << iter_ << ", forward_backward_update_time: "
                 << iter_time << " ms";
 #endif
@@ -444,7 +439,7 @@ void Solver<Dtype>::ResetTimers() {
 template <typename Dtype>
 void Solver<Dtype>::PrintTimers(bool printTotal) {
 #ifdef USE_MLSL
-    if (MLSL::GetNodeId())
+    if (mn::get_node_id() != 0)
        return;
 #endif
 
@@ -626,19 +621,19 @@ void Solver<Dtype>::TestClassification(const int test_net_id) {
   }
   if (param_.test_compute_loss()) {
 #ifdef USE_MLSL
-    MPI_Allreduce(MPI_IN_PLACE, &loss, 1, sizeof(Dtype) == 4 ?
-        MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    loss /= (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
-    if (MLSL::GetNodeId() == 0) LOG(INFO) << "Test loss: " << loss;
+    mn::allreduce(&loss, 1);
+    loss /= (param_.test_iter(test_net_id) * mn::get_nodes_count());
+    if (mn::get_node_id() == 0) {
+      LOG(INFO) << "Test loss: " << loss;
+    }
 #else /* !USE_MLSL */
     loss /= param_.test_iter(test_net_id);
     LOG(ERROR) << "Test loss: " << loss;
 #endif /* USE_MLSL */
   }
 #ifdef USE_MLSL
-  MPI_Allreduce(MPI_IN_PLACE, test_score.data(), test_score.size(),
-          sizeof(Dtype) == 4 ? MPI_FLOAT : MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  if (MLSL::GetNodeId() == 0)
+  mn::allreduce(test_score.data(), test_score.size());
+  if (mn::get_node_id() == 0)
 #endif /* USE_MLSL */
   for (int i = 0; i < test_score.size(); ++i) {
     const int output_blob_index =
@@ -648,7 +643,7 @@ void Solver<Dtype>::TestClassification(const int test_net_id) {
     ostringstream loss_msg_stream;
 #ifdef USE_MLSL
     const Dtype mean_score =
-      test_score[i] / (param_.test_iter(test_net_id) * MLSL::GetNumNodes());
+      test_score[i] / (param_.test_iter(test_net_id) * mn::get_nodes_count());
 #else /* !USE_MLSL */
     const Dtype mean_score = test_score[i] / param_.test_iter(test_net_id);
 #endif /* USE_MLSL */
@@ -784,7 +779,9 @@ void Solver<Dtype>::Snapshot() {
   CHECK(Caffe::root_solver());
 
 #ifdef USE_MLSL
-  if (MLSL::GetNodeId() != 0) return;
+  if (mn::get_node_id() != 0) {
+    return;
+  }
 #endif /* USE_MLSL */
 
   string model_filename;

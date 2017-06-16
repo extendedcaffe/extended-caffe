@@ -1,6 +1,6 @@
 # Add-on Notes
 ## How to build
- 1. fill your_project_path of BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
+ 1. fill your project path to BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
  2. make clean
  3. unset MKLROOT
  4. make -j<core_number>

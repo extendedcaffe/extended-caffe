@@ -50,10 +50,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <omp.h>
 #endif
 
-#ifdef USE_MLSL
-using namespace MLSL;
-#endif
-
 namespace caffe {
 
 template <typename Dtype>
@@ -231,7 +227,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
-void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
+void BaseConvolutionLayer<Dtype>::DoReshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const int first_spatial_axis = channel_axis_ + 1;
   CHECK_EQ(bottom[0]->num_axes(), first_spatial_axis + num_spatial_axes_)
@@ -300,7 +296,26 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
         bias_multiplier_.mutable_cpu_data());
   }
 
-  // ---- openmp ------------------------------------------
+#ifdef USE_MLSL
+  if ((this->layerOp == nullptr) && (this->phase_ == TRAIN)){
+    mn::OpRegInfo reg_info{ mn::train::get_session(), MLSL::OT_CC };
+    reg_info.set_name(this->layer_param().name());
+    reg_info.add_parameter_set<Dtype>(bottom[0]->channels() * top[0]->channels() / group_,
+                                      this->kernel_shape_.cpu_data()[0] * this->kernel_shape_.cpu_data()[1]);
+    if (bias_term_) {
+      reg_info.add_parameter_set<Dtype>(top[0]->channels(), 1);
+    }
+    this->layerOp = mn::train::add_operation(reg_info);
+  }
+#endif /* USE_MLSL */
+}
+
+template <typename Dtype>
+void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top) {
+  DoReshape(bottom, top);
+
+ // ---- openmp ------------------------------------------
   num_of_threads_ = 1;
 #ifdef _OPENMP
   // LOG(ERROR) << "OMP max thread num: " << omp_get_max_threads();
@@ -319,33 +334,12 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   col_buffer_mt_.resize(col_buffer_mt_size);
   weight_diff_mt_.resize(weight_diff_mt_size);
+}
 
-#ifdef USE_MLSL
-  if (this->layerOp == NULL) {
-    DataType dt = (sizeof(Dtype) == 4)? DT_FLOAT : DT_DOUBLE;
-  	ComputeOpRegInfo *myRegInfo;
-  	int ic = bottom[0]->channels();
-  	int iw = bottom[0]->width();
-  	int ih = bottom[0]->height();
-
-  	int oc = top[0]->channels();
-  	int ofmSize = top[0]->width()*top[0]->height();
-
-  	myRegInfo = new ComputeOpRegInfo(COMP_OP_TYPE_CC);
-  	myRegInfo->SetName(this->layer_param_.name().c_str());
-  	myRegInfo->AddInputFeatureMap(ic, iw*ih, dt);
-  	myRegInfo->AddOutputFeatureMap(oc, ofmSize, dt);
-  	myRegInfo->AddWeights(ic*oc/group_, this->kernel_shape_.cpu_data()[0]*this->kernel_shape_.cpu_data()[1], dt, DISTRIBUTED_WEIGHT_UPDATE);
-
-    if (bias_term_) {
-        myRegInfo->AddWeights(oc, 1, dt, false /* no make sense to do distributed update for bias */);
-    }
-
-    myRegInfo->Validate();
-  	this->layerOp = new ComputeOp(myRegInfo, caffe::internode::data_parallelism);
-    delete myRegInfo;
-  }
-#endif /* USE_MLSL */
+template <typename Dtype>
+void BaseConvolutionLayer<Dtype>::ReshapeForMKL(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top) {
+  DoReshape(bottom, top);
 }
 
 template <typename Dtype>

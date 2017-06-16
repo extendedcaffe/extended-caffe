@@ -61,7 +61,7 @@ void SpatialDropoutLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   // Set up the cache for random number generation
   // ReshapeLike does not work because rand_vec_ is of Dtype uint
   
-  rand_vec_.Reshape(bottom[0]->num(), bottom[0]->channels(), 1, 1);
+  rand_vec_.Reshape(bottom[0]->shape(0), bottom[0]->shape(1), 1, 1);
 }
 
 template <typename Dtype>
@@ -70,9 +70,9 @@ void SpatialDropoutLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   unsigned int* mask = rand_vec_.mutable_cpu_data();
-  const int num = bottom[0]->num();
-  const int channel = bottom[0]->channels();
-  const int img_size = bottom[0]->height() * bottom[0]->width();
+  const int num = bottom[0]->shape(0);
+  const int channel = bottom[0]->shape(1);
+  size_t spatial_dim = bottom[0]->count() / (bottom[0]->shape(0) * channel);
   if (this->phase_ == TRAIN) {
     // Create random numbers
     caffe_rng_bernoulli(num * channel, 1. - threshold_, mask);
@@ -81,11 +81,11 @@ void SpatialDropoutLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 #endif
     for (int i = 0; i < num; ++i) {
       for (int j = 0; j < channel; j++) {
-        int offset = (i * channel + j) * img_size;
+        size_t offset = (i * channel + j) * spatial_dim;
         if (mask[i * channel + j] == 1) {
-          caffe_cpu_axpby(img_size, scale_, bottom_data + offset, (Dtype)0, top_data + offset);
+          caffe_cpu_axpby(spatial_dim, scale_, bottom_data + offset, (Dtype)0, top_data + offset);
         } else {
-          caffe_set(img_size, (Dtype)0, top_data + offset);
+          caffe_set(spatial_dim, (Dtype)0, top_data + offset);
         }
       }
     }
@@ -103,7 +103,7 @@ void SpatialDropoutLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     const int num = bottom[0]->num();
     const int channel = bottom[0]->channels();
-    const int img_size = bottom[0]->height() * bottom[0]->width();
+    size_t spatial_dim = bottom[0]->count() / (bottom[0]->shape(0) * channel);
     if (this->phase_ == TRAIN) {
       const unsigned int* mask = rand_vec_.cpu_data();
 #ifdef _OPENMP
@@ -111,11 +111,11 @@ void SpatialDropoutLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 #endif
       for (int i = 0; i < num; ++i) {
         for (int j = 0; j < channel; j++) {
-          int offset = (i * channel + j) * img_size;
+          size_t offset = (i * channel + j) * spatial_dim;
           if (mask[i * channel + j] == 1) {
-            caffe_cpu_axpby(img_size, scale_, top_diff + offset, (Dtype)0, bottom_diff + offset);
+            caffe_cpu_axpby(spatial_dim, scale_, top_diff + offset, (Dtype)0, bottom_diff + offset);
           } else {
-            caffe_set(img_size, (Dtype)0, bottom_diff + offset);
+            caffe_set(spatial_dim, (Dtype)0, bottom_diff + offset);
           }
         }
       }
