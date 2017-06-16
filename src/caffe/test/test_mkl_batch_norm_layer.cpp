@@ -173,5 +173,143 @@ namespace caffe {
         this->blob_top_vec_);
   }
 
+  TYPED_TEST(MKLBatchNormLayerTest, TestForward3D) {
+    typedef typename TypeParam::Dtype Dtype;
+    vector<int> bottom_shape(5);
+    bottom_shape[0] = 5;
+    bottom_shape[1] = 16;
+    bottom_shape[2] = 2;
+    bottom_shape[3] = 3;
+    bottom_shape[4] = 4;
+    Blob<Dtype> blob3D(bottom_shape);
+    Blob<Dtype> blob3D_top(bottom_shape);
+    vector<Blob<Dtype>*> blob_bottom_vec;
+    vector<Blob<Dtype>*> blob_top_vec;
+    LayerParameter layer_param;
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+    filler.Fill(&blob3D);
+    blob_bottom_vec.push_back(&blob3D);
+    blob_top_vec.push_back(&blob3D_top);
+
+    MKLBatchNormLayer<Dtype> layer(layer_param);
+    layer.SetUp(blob_bottom_vec, blob_top_vec);
+    layer.Forward(blob_bottom_vec, blob_top_vec);
+
+    // Test mean
+    vector<int> dims = blob3D.shape();
+
+    for (int c = 0; c < dims[1]; ++c) {
+      Dtype sum = 0, var = 0;
+      for (int n = 0; n < dims[0]; ++n) {
+        for (int d = 0; d < dims[2]; ++d) {
+          for ( int h = 0; h < dims[3]; ++h ) {
+            for ( int w = 0; w < dims[4]; ++w ) {
+              vector<int> index(5);
+              index[0] = n;
+              index[1] = c;
+              index[2] = d;
+              index[3] = h;
+              index[4] = w;
+              Dtype data = blob3D_top.data_at(index);
+              sum += data;
+              var += data * data;
+            }
+          }
+        }
+      }
+      sum /= dims[2] * dims[3] * dims[4] * dims[0];
+      var /= dims[2] * dims[3] * dims[4] * dims[0];
+
+      const Dtype kErrorBound = 0.001;
+      // expect zero mean
+      EXPECT_NEAR(0, sum, kErrorBound);
+      // expect unit variance
+      EXPECT_NEAR(1, var, kErrorBound);
+    }
+  }
+
+  TYPED_TEST(MKLBatchNormLayerTest, TestForward3DInplace) {
+    typedef typename TypeParam::Dtype Dtype;
+    vector<int> bottom_shape(5);
+    bottom_shape[0] = 5;
+    bottom_shape[1] = 16;
+    bottom_shape[2] = 2;
+    bottom_shape[3] = 3;
+    bottom_shape[4] = 4;
+    Blob<Dtype> blob3D_inplace(bottom_shape);
+    vector<Blob<Dtype>*> blob_bottom_vec;
+    vector<Blob<Dtype>*> blob_top_vec;
+    LayerParameter layer_param;
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+    filler.Fill(&blob3D_inplace);
+    blob_bottom_vec.push_back(&blob3D_inplace);
+    blob_top_vec.push_back(&blob3D_inplace);
+
+    MKLBatchNormLayer<Dtype> layer(layer_param);
+    layer.SetUp(blob_bottom_vec, blob_top_vec);
+    layer.Forward(blob_bottom_vec, blob_top_vec);
+
+    // Test mean
+    vector<int> dims = blob3D_inplace.shape();
+
+    for (int c = 0; c < dims[1]; ++c) {
+      Dtype sum = 0, var = 0;
+      for (int n = 0; n < dims[0]; ++n) {
+        for (int d = 0; d < dims[2]; ++d) {
+          for ( int h = 0; h < dims[3]; ++h ) {
+            for ( int w = 0; w < dims[4]; ++w ) {
+              vector<int> index(5);
+              index[0] = n;
+              index[1] = c;
+              index[2] = d;
+              index[3] = h;
+              index[4] = w;
+              Dtype data = blob3D_inplace.data_at(index);
+              sum += data;
+              var += data * data;
+            }
+          }
+        }
+      }
+      sum /= dims[2] * dims[3] * dims[4] * dims[0];
+      var /= dims[2] * dims[3] * dims[4] * dims[0];
+
+      const Dtype kErrorBound = 0.001;
+      // expect zero mean
+      EXPECT_NEAR(0, sum, kErrorBound);
+      // expect unit variance
+      EXPECT_NEAR(1, var, kErrorBound);
+    }
+  }
+
+  TYPED_TEST(MKLBatchNormLayerTest, TestGradient3D) {
+    typedef typename TypeParam::Dtype Dtype;
+    LayerParameter layer_param;
+
+    MKLBatchNormLayer<Dtype> layer(layer_param);
+    GradientChecker<Dtype> checker(1e-2, 1e-2);
+
+    vector<int> bottom_shape(5);
+    bottom_shape[0] = 5;
+    bottom_shape[1] = 16;
+    bottom_shape[2] = 2;
+    bottom_shape[3] = 3;
+    bottom_shape[4] = 4;
+    Blob<Dtype> blob3D(bottom_shape);
+    Blob<Dtype> blob3D_top(bottom_shape);
+    vector<Blob<Dtype>*> blob_bottom_vec;
+    vector<Blob<Dtype>*> blob_top_vec;
+
+    FillerParameter filler_param;
+    GaussianFiller<Dtype> filler(filler_param);
+    filler.Fill(&blob3D);
+    blob_bottom_vec.push_back(&blob3D);
+    blob_top_vec.push_back(&blob3D_top);
+
+    checker.CheckGradientExhaustive(&layer, blob_bottom_vec,
+        blob_top_vec);
+  }
 }  // namespace caffe
 #endif  // #if defined(MKL2017_SUPPORTED)

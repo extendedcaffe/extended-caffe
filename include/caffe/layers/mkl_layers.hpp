@@ -448,8 +448,10 @@ class MKLBatchNormLayer : public Layer<Dtype> {
   Dtype eps_;
   bool use_weight_bias_;
   bool bias_term_;
+  int num_spatial_axes_;
   int num_;
   int channels_;
+  int depth_;
   int height_;
   int width_;
 

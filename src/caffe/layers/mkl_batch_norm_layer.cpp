@@ -61,8 +61,7 @@ MKLBatchNormLayer<Dtype>::~MKLBatchNormLayer() {
 template <typename Dtype>
 void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  moving_average_fraction_ =
-                this->layer_param_.batch_norm_param().moving_average_fraction();
+  moving_average_fraction_ = this->layer_param_.batch_norm_param().moving_average_fraction();
   eps_ = this->layer_param_.batch_norm_param().eps();
   use_weight_bias_ = this->layer_param_.batch_norm_param().use_weight_bias();
   bias_term_ = this->layer_param_.batch_norm_param().bias_term();
@@ -75,32 +74,48 @@ void MKLBatchNormLayer<Dtype>::Init(const vector<Blob<Dtype>*>& bottom,
       use_global_stats_ = true;
   }
 
-  size_t dim = 4, sizes[4], strides[4];
-
-  channels_ = bottom[0]->channels();
-  height_   = bottom[0]->height();
-  width_    = bottom[0]->width();
-  num_      = bottom[0]->num();
-
-  sizes[0] = width_;
-  sizes[1] = height_;
-  sizes[2] = channels_;
-  sizes[3] = num_;
-
-  strides[0] = 1;
-  strides[1] = sizes[0];
-  strides[2] = sizes[0]*sizes[1];
-  strides[3] = sizes[0]*sizes[1]*sizes[2];
-
   // Names are for debugging only
   fwd_bottom_data->name = "fwd_bottom_data   @ " + this->layer_param_.name();
   fwd_top_data->name =    "fwd_top_data      @ " + this->layer_param_.name();
   bwd_bottom_diff->name = "bwd_bottom_diff   @ " + this->layer_param_.name();
   bwd_top_diff->name =    "bwd_top_diff      @ " + this->layer_param_.name();
 
-  // TODO: Make a cleanup routine to avoid
-  // copy of following code in the Destructor
+  num_spatial_axes_ = bottom[0]->num_axes() - 2;
+  size_t dim = 4, sizes[4], strides[4];
 
+  if (num_spatial_axes_ == 2) {
+    num_      = bottom[0]->shape(0);
+    channels_ = bottom[0]->shape(1);
+    height_   = bottom[0]->shape(2);
+    width_    = bottom[0]->shape(3);
+
+    sizes[0] = width_;
+    sizes[1] = height_;
+    sizes[2] = channels_;
+    sizes[3] = num_;
+
+    strides[0] = 1;
+    strides[1] = sizes[0];
+    strides[2] = sizes[0] * sizes[1];
+    strides[3] = sizes[0] * sizes[1] * sizes[2];
+  } else {
+    const int* bottom_dims = bottom[0]->shape().data();
+    num_      = bottom_dims[0];
+    channels_ = bottom_dims[1];
+    depth_    = bottom_dims[2];
+    height_   = bottom_dims[3];
+    width_    = bottom_dims[4];
+
+    sizes[0] = height_ * width_;
+    sizes[1] = depth_;
+    sizes[2] = channels_;
+    sizes[3] = num_;
+
+    strides[0] = 1;
+    strides[1] = sizes[0];
+    strides[2] = sizes[0] * sizes[1];
+    strides[3] = sizes[0] * sizes[1] * sizes[2];
+  }
   dnnError_t e;
   dnnLayoutDelete<Dtype>(layout_usr_);
   e = dnnLayoutCreate<Dtype>(&layout_usr_, dim, sizes, strides);
@@ -207,21 +222,28 @@ template <typename Dtype>
 void MKLBatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   bool reshaping = true;
-  if ((num_ == bottom[0]->num()) &&
-      channels_ == bottom[0]->channels() &&
-      height_ == bottom[0]->height() &&
-      width_ == bottom[0]->width()) {
-    reshaping = false;
+  if (num_spatial_axes_ == 2) {
+    if ((num_ == bottom[0]->shape(0)) &&
+        channels_ == bottom[0]->shape(1) &&
+        height_ == bottom[0]->shape(2) &&
+        width_ == bottom[0]->shape(3)) {
+      reshaping = false;
+    }
+  } else {
+    const int* bottom_dims = bottom[0]->shape().data();
+    if ((num_ == bottom_dims[0]) &&
+        channels_ == bottom_dims[1] &&
+        depth_ == bottom_dims[2] &&
+        height_ == bottom_dims[3] &&
+        width_ == bottom_dims[4]) {
+      reshaping = false;
+    }
   }
 
   if (bottom[0] == top[0]) {  // in-place computation
     temp_.ReshapeLike(*bottom[0]);
   } else {
-    channels_ = bottom[0]->channels();
-    height_ = bottom[0]->height();
-    width_ = bottom[0]->width();
-    num_ = bottom[0]->num();
-    top[0]->Reshape(num_, channels_, height_, width_);
+    top[0]->ReshapeLike(*bottom[0]);
   }
 
   if (reshaping == true) {
@@ -257,12 +279,12 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
 
       dnnError_t e;
       e = dnnBatchNormalizationCreateForward<Dtype>(
-        &batchNormFwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
+            &batchNormFwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
       CHECK_EQ(e, E_SUCCESS);
 
       e = dnnBatchNormalizationCreateForward<Dtype>(
-        &batchNormFwdInference, NULL, mem_descr->layout_int, eps_,
-                                    dnnUseScaleShift | dnnUseInputMeanVariance);
+            &batchNormFwdInference, NULL, mem_descr->layout_int, eps_,
+            dnnUseScaleShift | dnnUseInputMeanVariance);
       CHECK_EQ(e, E_SUCCESS);
 
       fwd_top_data   ->create_internal_layout(batchNormFwd, dnnResourceDst);
@@ -271,11 +293,11 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
 
        if (!use_global_stats_) {
          e = dnnBatchNormalizationCreateBackward<Dtype>(
-            &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
+               &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift);
          CHECK_EQ(e, E_SUCCESS);
        } else {
          e = dnnBatchNormalizationCreateBackward<Dtype>(
-            &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
+               &batchNormBwd, NULL, mem_descr->layout_int, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
          CHECK_EQ(e, E_SUCCESS);
        }
     }
@@ -287,25 +309,24 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
 
       dnnError_t e;
       e = dnnBatchNormalizationCreateForward<Dtype>(
-        &batchNormFwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
+            &batchNormFwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
       CHECK_EQ(e, E_SUCCESS);
       e = dnnBatchNormalizationCreateForward<Dtype>(
-        &batchNormFwdInference, NULL, layout_usr_, eps_,
-                                    dnnUseScaleShift | dnnUseInputMeanVariance);
+            &batchNormFwdInference, NULL, layout_usr_, eps_,
+             dnnUseScaleShift | dnnUseInputMeanVariance);
       CHECK_EQ(e, E_SUCCESS);
 
       if (!use_global_stats_) {
         e = dnnBatchNormalizationCreateBackward<Dtype>(
-          &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
+              &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift);
         CHECK_EQ(e, E_SUCCESS);
       } else {
         e = dnnBatchNormalizationCreateBackward<Dtype>(
-          &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
+              &batchNormBwd, NULL, layout_usr_, eps_, dnnUseScaleShift | dnnUseInputMeanVariance);
         CHECK_EQ(e, E_SUCCESS);
       }
     }
-    bottom_data =
-      reinterpret_cast<void *>(const_cast<Dtype*>(bottom[0]->cpu_data()));
+    bottom_data = reinterpret_cast<void *>(const_cast<Dtype*>(bottom[0]->cpu_data()));
     amount_to_copy = bottom[0]->count();
   }
   if (is_first_pass == 1) {
@@ -413,7 +434,7 @@ void MKLBatchNormLayer<Dtype>::Forward_cpu(
     caffe_cpu_axpby(this->blobs_[0]->count(), Dtype(1), mean_buffer_,
         moving_average_fraction_, this->blobs_[0]->mutable_cpu_data());
     int m = bottom[0]->count()/channels_;
-    Dtype bias_correction_factor = m > 1 ? Dtype(m)/(m-1) : 1;
+    Dtype bias_correction_factor = m > 1 ? Dtype(m) / (m - 1) : 1;
     caffe_cpu_axpby(this->blobs_[1]->count(), bias_correction_factor,
         variance_buffer_, moving_average_fraction_,
         this->blobs_[1]->mutable_cpu_data());
