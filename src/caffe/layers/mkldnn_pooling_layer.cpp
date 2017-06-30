@@ -80,7 +80,14 @@ void MKLDNNPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom
         kernel_w_ = bottom[0]->width();
     } else {
         if (pool_param.kernel_size_size()) {
+          CHECK(pool_param.kernel_size_size() == 1 || pool_param.kernel_size_size() == 2)
+          << "kernel_size must be specified once, or 2 values for Height and Width";
+          if (pool_param.kernel_size_size() == 1) {
             kernel_h_ = kernel_w_ = pool_param.kernel_size(0);
+          } else {
+            kernel_h_ = pool_param.kernel_size(0);
+            kernel_w_ = pool_param.kernel_size(1);
+          }
         } else {
             kernel_h_ = pool_param.kernel_h();
             kernel_w_ = pool_param.kernel_w();
@@ -89,17 +96,38 @@ void MKLDNNPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom
     CHECK_GT(kernel_h_, 0) << "Filter dimensions cannot be zero.";
     CHECK_GT(kernel_w_, 0) << "Filter dimensions cannot be zero.";
     if (!pool_param.has_pad_h()) {
+      CHECK(pool_param.pad_size() < 3)
+          << "pad must be specified no more than 3 dimensions";
+      if (pool_param.pad_size() == 0) {
+        pad_t_ = pad_b_ = pad_l_ = pad_r_ = 0;
+      } else if (pool_param.pad_size() == 1) {
         pad_t_ = pad_b_ = pad_l_ = pad_r_ = pool_param.pad(0);
+      } else {
+        pad_t_ = pad_b_ = pool_param.pad(0);
+        pad_l_ = pad_r_ = pool_param.pad(1);
+      }
     } else {
         pad_t_ = pad_b_ = pool_param.pad_h();
         pad_l_ = pad_r_ = pool_param.pad_w();
     }
+
     if (!pool_param.has_stride_h()) {
+      // CHECK(pool_param.stride_size() == 0 || pool_param.stride_size() == 1 || pool_param.stride_size() == 2)
+      CHECK(pool_param.stride_size() < 3)
+        << "stride must be specified no more than 3 dimensions";
+      if (pool_param.stride_size() == 0) {
+        stride_h_ = stride_w_ = 1;
+      } else if (pool_param.stride_size() == 1) {
         stride_h_ = stride_w_ = pool_param.stride(0);
+      } else {
+        stride_h_ = pool_param.stride(0);
+        stride_w_ = pool_param.stride(1);
+      }
     } else {
-        stride_h_ = pool_param.stride_h();
-        stride_w_ = pool_param.stride_w();
+      stride_h_ = pool_param.stride_h();
+      stride_w_ = pool_param.stride_w();
     }
+
     if (global_pooling_) {
         CHECK(pad_t_ == 0 && pad_l_ == 0 && stride_h_ == 1 && stride_w_ == 1)
             << "With Global_pooling: true; only pad = 0 and stride = 1";

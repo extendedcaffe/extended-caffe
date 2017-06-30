@@ -45,6 +45,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "caffe/proto/caffe.pb.h"
 
 #include "caffe/layers/base_conv_layer.hpp"
+#include "mkldnn.hpp"
+
+using namespace mkldnn;
 
 namespace caffe {
 
@@ -102,6 +105,10 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       : BaseConvolutionLayer<Dtype>(param) {}
 
   virtual inline const char* type() const { return "Convolution"; }
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -114,7 +121,61 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
+
+ private:
+  engine* cpu_engine;
+  vector<primitive> pipeline_fwd;
+  vector<primitive> pipeline_bwd_data;
+  vector<primitive> pipeline_bwd_wgts;
+
+  vector<int> src_dims;
+  vector<Dtype> src_zero_slice;
+  vector<Dtype> dst_zero_slice;
+  vector<Dtype> conv_weight;
+  vector<Dtype> conv_bias;
+  vector<Dtype> conv_srcs;
+  vector<Dtype> conv_dsts;
+
+  vector<Dtype> conv_weight_bwd;
+  vector<Dtype> conv_weight_diff;
+  vector<Dtype> conv_bias_diff;
+  vector<Dtype> conv_srcs_diff;
+  vector<Dtype> conv_dsts_diff;
+
+  vector<memory> conv_src_mem;
+  vector<memory> conv_weights_mem;
+  vector<memory> conv_bias_mem;
+  vector<memory> conv_dst_mem;
+  vector<memory> sum_dst_mem;
+
+  vector<memory> conv_wgts_bwd_mem;
+  vector<memory> conv_wgts_diff_mem;
+  vector<memory> conv_bias_diff_mem;
+  vector<memory> conv_src_diff_mem;
+  vector<memory> conv_dst_diff_mem;
+  vector<memory> sum_dst_bwd_data_mem;
+  vector<memory> sum_dst_bwd_wgts_mem;
+  vector<memory> sum_dst_bwd_bias_mem;
+
+  vector<primitive> conv_fwds;
+  vector<primitive> sums_fwds;
+
+  vector<primitive> conv_bwds_data;
+  vector<primitive> sums_bwds_data;
+  vector<primitive> conv_bwds_wgts;
+  vector<primitive> sums_bwds_wgts;
+  vector<primitive> sums_bwds_bias;
+
+  int useAVX_t;
+  int checkAVX();
+  bool srcsync;
+  void Reorder(Dtype* output, Blob<Dtype>* data_blob, int reorder_t, int useAVX_t, bool reverse = false, bool isdiff = false);
+  void ReshapeForMKLdnn(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
+  void Forward_3D(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
+  void Backward_data_3D(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
+  void Backward_weights_3D(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
 };
+
 
 }  // namespace caffe
 

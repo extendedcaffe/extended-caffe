@@ -326,6 +326,12 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                   << num_of_threads_;
      num_of_threads_ = 1;
   }
+
+  if (num_spatial_axes_ == 3) {
+    // LOG(ERROR) << "3D case";
+    num_of_threads_ = 1;
+  }
+
   // LOG(ERROR) << "final thread number: " << num_of_threads_;
 #endif
 

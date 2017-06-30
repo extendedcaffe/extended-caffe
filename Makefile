@@ -468,7 +468,7 @@ ifeq ($(PERFORMANCE_MONITORING), 1)
 	CXXFLAGS += -DPERFORMANCE_MONITORING
 endif
 
-# include Makefile.mkldnn
+include Makefile.mkldnn
 ifeq ($(USE_MKLDNN_AS_DEFAULT_ENGINE), 1)
 	CXXFLAGS += -DUSE_MKLDNN_AS_DEFAULT_ENGINE
 endif

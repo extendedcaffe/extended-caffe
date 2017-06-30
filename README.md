@@ -3,7 +3,7 @@
  1. fill your project path to BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
  2. make clean
  3. unset MKLROOT
- 4. make -j<core_number>
+ 4. make -j `nproc`
  6. make pycaffe
 
 # Caffe

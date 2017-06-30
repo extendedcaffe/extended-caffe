@@ -32,7 +32,7 @@ mkldnn_download:
 
 mkldnn_build: mkldnn_download
 	cmake $(MKLDNN_CMAKE_FLAGS)
-	make -C $(CAFFE_ROOTDIR)/$(MKLDNN_BUILDDIR)
+	make -C $(CAFFE_ROOTDIR)/$(MKLDNN_BUILDDIR) -j `nproc`
 	make -C $(CAFFE_ROOTDIR)/$(MKLDNN_BUILDDIR) install
 else
 mkldnn_download:
@@ -43,14 +43,14 @@ mkldnn_clean:
 	@rm -rf $(MKLDNN_SRCDIR) $(MKLDNN_BUILDDIR) $(MKLDNN_INSTALLDIR) $(MKLDNN_TMPDIR)
 
 mkldnnroot_set:
-	$(eval CXXFLAGS += -DMKLDNN_SUPPORTED) \
+	# $(eval CXXFLAGS += -DMKLDNN_SUPPORTED)
 	$(eval INCLUDE_DIRS += $(MKLDNNROOT)/include)
 	$(eval MKLDNN_LDFLAGS += -lmkldnn -L$(MKLDNNROOT)/lib) \
 	$(eval MKLDNN_LDFLAGS += -Wl,-rpath,$(MKLDNNROOT)/lib) \
 
 
 mkldnnroot_notset: mkldnn_build
-	$(eval CXXFLAGS += -DMKLDNN_SUPPORTED) \
+	# $(eval CXXFLAGS += -DMKLDNN_SUPPORTED)
 	$(eval INCLUDE_DIRS += $(MKLDNN_INSTALLDIR)/include) \
 	$(eval MKLDNN_LDFLAGS += -lmkldnn) \
 	$(eval MKLDNN_LDFLAGS += -L$(MKLDNN_INSTALLDIR)/lib -Wl,-rpath,${MKLDNN_INSTALLDIR}/lib)

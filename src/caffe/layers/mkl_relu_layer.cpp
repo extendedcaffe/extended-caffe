@@ -90,7 +90,7 @@ void MKLReLULayer<Dtype>::Init(
 template <typename Dtype>
 void MKLReLULayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-//  CHECK_EQ(top[0]->shape(), bottom[0]->shape());
+    // CHECK_EQ(top[0]->shape(), bottom[0]->shape());
     Init(bottom, top);
 }
 
@@ -140,7 +140,7 @@ void MKLReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ((bottom[0]->get_prv_data_descriptor())->get_descr_type(),
               PrvMemDescr::PRV_DESCR_MKL2017);
       shared_ptr<MKLData<Dtype> > mem_descr
-        =  boost::static_pointer_cast<MKLData<Dtype> >
+        = boost::static_pointer_cast<MKLData<Dtype> >
               (bottom[0]->get_prv_data_descriptor());
       CHECK(mem_descr != NULL);
 
@@ -154,7 +154,7 @@ void MKLReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ(e, E_SUCCESS);
 
       DLOG(INFO) << "Using layout of " << mem_descr->name
-              << " as input layout for " << this->layer_param_.name();
+                 << " as input layout for " << this->layer_param_.name();
       // copy shared_ptr
       fwd_bottom_data_ = mem_descr;
 
@@ -186,7 +186,7 @@ void MKLReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
   if (fwd_top_data_->conversion_needed()) {
     if (bottom[0] == top[0]) {
-//      top[0]->set_prv_data_descriptor(fwd_bottom_data_);
+      // top[0]->set_prv_data_descriptor(fwd_bottom_data_);
       DLOG(INFO) << "Using bottom as top (in-place) in mklReLU.";
     } else {
       top[0]->set_prv_data_descriptor(fwd_top_data_);

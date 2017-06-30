@@ -77,7 +77,7 @@ void DeconvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 #endif
       for (int n = 0; n < this->num_; ++n) {
         this->backward_cpu_gemm(bottom_data + n * this->bottom_dim_, weight,
-            top_data + n * this->top_dim_);
+                                top_data + n * this->top_dim_);
         if (this->bias_term_) {
           const Dtype* bias = this->blobs_[1]->cpu_data();
           this->forward_cpu_bias(top_data + n * this->top_dim_, bias);
