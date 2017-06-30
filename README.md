@@ -6,6 +6,12 @@
  4. make -j `nproc`
  6. make pycaffe
 
+## How to run w/ best performance
+ 1. turn off hyper threading in your machine
+ 2. set environment variable to enable core affinity using: $ export KMP_AFFINITY=compact,1,0,granularity=fine
+ 3. set OMP and MKL thread using number: $export OMP_NUM_THREADS=`nproc` and $export MKL_NUM_THREADS=`nproc`
+ 4. launch caffe train task
+
 # Caffe
 [![Build Status](https://travis-ci.org/BVLC/caffe.svg?branch=master)](https://travis-ci.org/BVLC/caffe)
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
