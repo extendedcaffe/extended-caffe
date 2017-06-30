@@ -1,15 +1,18 @@
 # Add-on Notes
 ## How to build
  1. fill your project path to BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
- 2. make clean
- 3. unset MKLROOT
- 4. make -j `nproc`
- 6. make pycaffe
+ 2. $make clean
+ 3. $unset MKLROOT
+ 4. $make -j \`nproc\`
+ 6. $make pycaffe
 
 ## How to run w/ best performance
  1. turn off hyper threading in your machine
- 2. set environment variable to enable core affinity using: $ export KMP_AFFINITY=compact,1,0,granularity=fine
- 3. set OMP and MKL thread using number: $export OMP_NUM_THREADS=`nproc` and $export MKL_NUM_THREADS=`nproc`
+ 2. set environment variable to enable core affinity using:
+      $export KMP_AFFINITY=compact,1,0,granularity=fine
+ 3. set OMP and MKL thread using number:
+      $export OMP_NUM_THREADS=\`nproc\`
+      $export MKL_NUM_THREADS=\`nproc\`
  4. launch caffe train task
 
 # Caffe
