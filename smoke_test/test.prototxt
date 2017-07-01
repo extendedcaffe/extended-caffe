@@ -1,0 +1,734 @@
+name: "UNet"
+# time_info: true
+engine: "MKL2017"
+
+input: "data"
+input_shape {
+  dim: 1
+  dim: 1
+  dim: 512
+  dim: 512
+}
+
+## contraction
+# contraction 0
+layer {
+    bottom: "data"
+    top: "conv0_1"
+    name: "conv0_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 64
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv0_1"
+    top: "conv0_1"
+    name: "conv0_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv0_1"
+    top: "conv0_2"
+    name: "conv0_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 64
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv0_2"
+    top: "conv0_2"
+    name: "conv0_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv0_2"
+    top: "pool0"
+    name: "pool0"
+    type: "Pooling"
+    pooling_param {
+        pool: MAX
+        kernel_size: 2
+        stride: 2
+    }
+}
+
+# contraction 1
+layer {
+    bottom: "pool0"
+    top: "conv1_1"
+    name: "conv1_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 128
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv1_1"
+    top: "conv1_1"
+    name: "conv1_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv1_1"
+    top: "conv1_2"
+    name: "conv1_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 128
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv1_2"
+    top: "conv1_2"
+    name: "conv1_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv1_2"
+    top: "pool1"
+    name: "pool1"
+    type: "Pooling"
+    pooling_param {
+        pool: MAX
+        kernel_size: 2
+        stride: 2
+    }
+}
+
+# contraction 2
+layer {
+    bottom: "pool1"
+    top: "conv2_1"
+    name: "conv2_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 256
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv2_1"
+    top: "conv2_1"
+    name: "conv2_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv2_1"
+    top: "conv2_2"
+    name: "conv2_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 256
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv2_2"
+    top: "conv2_2"
+    name: "conv2_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv2_2"
+    top: "pool2"
+    name: "pool2"
+    type: "Pooling"
+    pooling_param {
+        pool: MAX
+        kernel_size: 2
+        stride: 2
+    }
+}
+
+# contraction 3
+layer {
+    bottom: "pool2"
+    top: "conv3_1"
+    name: "conv3_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 512
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv3_1"
+    top: "conv3_1"
+    name: "conv3_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv3_1"
+    top: "conv3_2"
+    name: "conv3_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 512
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv3_2"
+    top: "conv3_2"
+    name: "conv3_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv3_2"
+    top: "pool3"
+    name: "pool3"
+    type: "Pooling"
+    pooling_param {
+        pool: MAX
+        kernel_size: 2
+        stride: 2
+    }
+}
+
+# contraction 4
+layer {
+    bottom: "pool3"
+    top: "conv4_1"
+    name: "conv4_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 1024
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv4_1"
+    top: "conv4_1"
+    name: "conv4_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv4_1"
+    top: "conv4_2"
+    name: "conv4_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 1024
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "conv4_2"
+    top: "conv4_2"
+    name: "conv4_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+## expansion
+
+# expansion 3
+layer {
+    bottom: "conv4_2"
+    top: "deconv3"
+    name: "deconv3"
+    type: "Deconvolution"
+    convolution_param {
+        num_output: 512
+        pad: 0
+        kernel_size: 2
+        stride: 2 
+        weight_filler {
+            type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "deconv3"
+    top: "deconv3"
+    name: "deconv3_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv3_2"
+    bottom: "deconv3"
+    top: "crop3"
+    name: "crop3"
+    type: "Crop"
+}
+
+layer {
+    bottom: "crop3"
+    bottom: "deconv3"
+    top: "bridge3"
+    name: "bridge3"
+    type: "Concat"
+}
+
+layer {
+    bottom: "bridge3"
+    top: "_conv3_1"
+    name: "_conv3_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 512
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv3_1"
+    top: "_conv3_1"
+    name: "_conv3_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "_conv3_1"
+    top: "_conv3_2"
+    name: "_conv3_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 512
+        kernel_size: 3
+        pad: 1
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv3_2"
+    top: "_conv3_2"
+    name: "_conv3_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+# expansion 2
+layer {
+    bottom: "_conv3_2"
+    top: "deconv2"
+    name: "deconv2"
+    type: "Deconvolution"
+    convolution_param {
+        num_output: 256
+        pad: 0
+        kernel_size: 2
+        stride: 2 
+        weight_filler {
+            type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "deconv2"
+    top: "deconv2"
+    name: "deconv2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv2_2"
+    bottom: "deconv2"
+    top: "crop2"
+    name: "crop2"
+    type: "Crop"
+}
+
+layer {
+    bottom: "crop2"
+    bottom: "deconv2"
+    top: "bridge2"
+    name: "bridge2"
+    type: "Concat"
+}
+
+layer {
+    bottom: "bridge2"
+    top: "_conv2_1"
+    name: "_conv2_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 256
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv2_1"
+    top: "_conv2_1"
+    name: "_conv2_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "_conv2_1"
+    top: "_conv2_2"
+    name: "_conv2_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 256
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv2_2"
+    top: "_conv2_2"
+    name: "_conv2_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+# expansion 1
+layer {
+    bottom: "_conv2_2"
+    top: "deconv1"
+    name: "deconv1"
+    type: "Deconvolution"
+    convolution_param {
+        num_output: 128
+        pad: 0
+        kernel_size: 2
+        stride: 2 
+        weight_filler {
+            type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "deconv1"
+    top: "deconv1"
+    name: "deconv1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv1_2"
+    bottom: "deconv1"
+    top: "crop1"
+    name: "crop1"
+    type: "Crop"
+}
+
+layer {
+    bottom: "crop1"
+    bottom: "deconv1"
+    top: "bridge1"
+    name: "bridge1"
+    type: "Concat"
+}
+
+layer {
+    bottom: "bridge1"
+    top: "_conv1_1"
+    name: "_conv1_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 128
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv1_1"
+    top: "_conv1_1"
+    name: "_conv1_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "_conv1_1"
+    top: "_conv1_2"
+    name: "_conv1_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 128
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv1_2"
+    top: "_conv1_2"
+    name: "_conv1_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+# expansion 0
+layer {
+    bottom: "_conv1_2"
+    top: "deconv0"
+    name: "deconv0"
+    type: "Deconvolution"
+    convolution_param {
+        num_output: 64
+        pad: 0
+        kernel_size: 2
+        stride: 2 
+        weight_filler {
+            type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "deconv0"
+    top: "deconv0"
+    name: "deconv0_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "conv0_2"
+    bottom: "deconv0"
+    top: "crop0"
+    name: "crop0"
+    type: "Crop"
+}
+
+layer {
+    bottom: "crop0"
+    bottom: "deconv0"
+    top: "bridge0"
+    name: "bridge0"
+    type: "Concat"
+}
+
+layer {
+    bottom: "bridge0"
+    top: "_conv0_1"
+    name: "_conv0_1"
+    type: "Convolution"
+    convolution_param {
+        num_output: 64
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv0_1"
+    top: "_conv0_1"
+    name: "_conv0_1_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+layer {
+    bottom: "_conv0_1"
+    top: "_conv0_2"
+    name: "_conv0_2"
+    type: "Convolution"
+    convolution_param {
+        num_output: 64
+        kernel_size: 3
+        pad: 1 #unlike znet solution, I set pad = 1 here
+        stride: 1
+        weight_filler {
+          type: "msra"
+        }
+    }
+}
+
+layer {
+    bottom: "_conv0_2"
+    top: "_conv0_2"
+    name: "_conv0_2_relu"
+    type: "ReLU"
+    relu_param {
+      negative_slope: 0.01 
+    } 
+}
+
+
+# score layer
+layer {
+    engine: "CAFFE"
+    bottom: "_conv0_2"
+    top: "score"
+    name: "score"
+    type: "Convolution"
+    convolution_param {
+        num_output: 2
+        kernel_size: 1
+        pad: 0
+        stride: 1
+        weight_filler {
+          type: "xavier"
+        }
+    }
+}
+
+layer {
+    name: "prob"
+    type: "Softmax"
+    bottom: "score"
+    top: "prob"
+}
+
