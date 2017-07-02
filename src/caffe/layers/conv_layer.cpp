@@ -69,10 +69,17 @@ int ConvolutionLayer<Dtype>::checkAVX() {
                    (str_dims[1] == 1) && (str_dims[2] == 1);
   bool no_dilation = (dil_dims[0] == 1) &&
                      (dil_dims[1] == 1) && (dil_dims[2] == 1);
-  bool no_group = this->group_ == 1;
+  bool no_group = (this->group_ == 1);
+  int kernel_size = 1;
+  for (int i = 0; i < this->kernel_shape_.count(); i++) {
+    kernel_size *= ker_dims[i];
+  }
+  bool no_1x1x1_kernel = (kernel_size > 1);
 
-  bool ok = true && no_dilation && no_stride &&
+  bool ok = true && no_dilation && no_stride && no_1x1x1_kernel &&
             no_group && (ic % 8 == 0 || ic == 3) && (oc % 8 == 0);
+
+
   if (!ok) {
     return 0;
   } else {
