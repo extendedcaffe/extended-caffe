@@ -79,14 +79,14 @@ void DropoutLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // So eventually trigger the assertion.
   top[0]->set_prv_data_descriptor(NULL);
   unsigned int* mask = rand_vec_.mutable_cpu_data();
-  const int count = bottom[0]->count();
+  const size_t count = bottom[0]->count();
   if (this->phase_ == TRAIN) {
     // Create random numbers
     caffe_rng_bernoulli(count, 1. - threshold_, mask);
 #ifdef _OPENMP
     #pragma omp parallel for
 #endif
-    for (int i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i) {
       top_data[i] = bottom_data[i] * mask[i] * scale_;
     }
   } else {
@@ -103,11 +103,11 @@ void DropoutLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     if (this->phase_ == TRAIN) {
       const unsigned int* mask = rand_vec_.cpu_data();
-      const int count = bottom[0]->count();
+      const size_t count = bottom[0]->count();
 #ifdef _OPENMP
       #pragma omp parallel for
 #endif
-      for (int i = 0; i < count; ++i) {
+      for (size_t i = 0; i < count; ++i) {
         bottom_diff[i] = top_diff[i] * mask[i] * scale_;
       }
     } else {
