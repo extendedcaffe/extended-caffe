@@ -306,7 +306,7 @@ void ConvolutionLayer<Dtype>::ReshapeForMKLdnn(const vector<Blob<Dtype>*>& botto
   memory::dims conv_strides = {str_dims[1], str_dims[2]};
   memory::dims conv_padding = {pad_dims[1], pad_dims[2]};
 
-  // creat memory descriptor
+  // create memory descriptor
   auto conv_src_md = (useAVX_t == 1) ? memory::desc({conv_src_nchw}, memory::data_type::f32, memory::format::nChw16c) :
                                        memory::desc({conv_src_nchw}, memory::data_type::f32, memory::format::nChw8c);
   auto conv_weights_md = (useAVX_t == 1) ? memory::desc({conv_weights_oihw}, memory::data_type::f32, memory::format::OIhw16i16o) :
@@ -317,7 +317,7 @@ void ConvolutionLayer<Dtype>::ReshapeForMKLdnn(const vector<Blob<Dtype>*>& botto
   auto conv_weights_bwd_md = (useAVX_t == 1) ? memory::desc({conv_weights_oihw}, memory::data_type::f32, memory::format::OIhw16o16i) :
                                                memory::desc({conv_weights_oihw}, memory::data_type::f32, memory::format::OIhw8o8i);
 
-  // creat convolution descriptor
+  // create convolution descriptor
   auto conv_desc = (this->bias_term_) ?
        convolution_forward::desc(prop_kind::forward, convolution_direct,
                                  conv_src_md, conv_weights_md, conv_bias_md, conv_dst_md,
@@ -341,7 +341,7 @@ void ConvolutionLayer<Dtype>::ReshapeForMKLdnn(const vector<Blob<Dtype>*>& botto
                                           conv_strides, conv_padding, conv_padding, padding_kind::zero);
   auto conv_bwd_wgts_pd = new convolution_backward_weights::primitive_desc(conv_bwd_wgts_desc, *cpu_engine, *conv_fwd_pd);
 
-  // creat slices sum descriptor
+  // create slices sum descriptor
   auto sum_src_pd = conv_fwd_pd->dst_primitive_desc();
   auto sum_dst_md = sum_src_pd.desc();
   vector<memory::primitive_desc> sum_srcs_pd(ker_dims[0], sum_src_pd);
@@ -501,12 +501,25 @@ void ConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 
   if (reinitialize == true) {
     BaseConvolutionLayer<Dtype>::Reshape(bottom, top);
+
     src_dims.clear();
     for (int i = 0; i < this->num_spatial_axes_ + 2; ++i) {
       src_dims.push_back(bottom_dims[i]);
     }
     if (useAVX_t != 0) {
-      ReshapeForMKLdnn(bottom,top);
+      try {
+        this->col_buffer_.Reshape(1, 1, 1, 1);
+        vector<Dtype>().swap(this->col_buffer_mt_);
+        vector<Dtype>().swap(this->weight_diff_mt_);
+
+        ReshapeForMKLdnn(bottom, top);
+      } catch (error& e) {
+        if (e.status == mkldnn_out_of_memory) {
+          LOG(ERROR) << "Out of memory, ";
+        }
+        LOG(ERROR) << "Error details: " << e.message;
+        throw e;
+      }
     }
   }
 }

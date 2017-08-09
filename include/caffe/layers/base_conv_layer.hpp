@@ -143,6 +143,15 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   int num_of_threads_;              // Number of threads to be used for
                                     // batch based parallelization eg.
                                     // min(batch,omp_get_num_threads())
+
+  Blob<Dtype> col_buffer_;
+  Blob<Dtype> bias_multiplier_;
+
+  size_t col_buffer_mt_size;   // openmp
+  size_t weight_diff_mt_size;  // openmp
+  std::vector<Dtype> col_buffer_mt_;   //  openmp
+  std::vector<Dtype> weight_diff_mt_;  // openmp
+
  private:
   // wrap im2col/col2im so we don't have to remember the (long) argument lists
   inline void conv_im2col_cpu(const Dtype* data, Dtype* col_buff) {
@@ -228,14 +237,6 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   int kernel_dim_;
   size_t col_offset_;
   size_t output_offset_;
-
-  Blob<Dtype> col_buffer_;
-  Blob<Dtype> bias_multiplier_;
-
-  size_t col_buffer_mt_size;   // openmp
-  size_t weight_diff_mt_size;  // openmp
-  std::vector<Dtype> col_buffer_mt_;   //  openmp
-  std::vector<Dtype> weight_diff_mt_;  // openmp
 };
 
 }  // namespace caffe
