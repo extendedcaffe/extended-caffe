@@ -34,8 +34,6 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
-
 #include <algorithm>
 #include <cfloat>
 #include <vector>
@@ -83,7 +81,7 @@ void ROIPoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // Number of ROIs
   int num_rois = bottom[1]->num();
   int batch_size = bottom[0]->num();
-  int top_count = top[0]->count();
+  size_t top_count = top[0]->count();
   Dtype* top_data = top[0]->mutable_cpu_data();
   caffe_set(top_count, Dtype(-FLT_MAX), top_data);
   int* argmax_data = max_idx_.mutable_cpu_data();

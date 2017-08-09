@@ -232,6 +232,8 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   Blob<Dtype> col_buffer_;
   Blob<Dtype> bias_multiplier_;
 
+  size_t col_buffer_mt_size;   // openmp
+  size_t weight_diff_mt_size;  // openmp
   std::vector<Dtype> col_buffer_mt_;   //  openmp
   std::vector<Dtype> weight_diff_mt_;  // openmp
 };

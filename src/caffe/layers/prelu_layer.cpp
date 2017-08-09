@@ -105,7 +105,7 @@ void PReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
-  const long count = bottom[0]->count();
+  const size_t count = bottom[0]->count();
   const int dim = bottom[0]->count(2);
   const int channels = bottom[0]->shape(1);
   const Dtype* slope_data = this->blobs_[0]->cpu_data();
@@ -121,8 +121,8 @@ void PReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   #ifdef _OPENMP
   #pragma omp parallel for
   #endif
-  for (long i = 0; i < count; ++i) {
-    long c = (i / dim) % channels / div_factor;
+  for (size_t i = 0; i < count; ++i) {
+    size_t c = (i / dim) % channels / div_factor;
     top_data[i] = std::max(bottom_data[i], Dtype(0))
         + slope_data[c] * std::min(bottom_data[i], Dtype(0));
   }
@@ -135,8 +135,8 @@ void PReLULayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* slope_data = this->blobs_[0]->cpu_data();
   const Dtype* top_diff = top[0]->cpu_diff();
-  const long count = bottom[0]->count();
-  const long dim = bottom[0]->count(2);
+  const size_t count = bottom[0]->count();
+  const size_t dim = bottom[0]->count(2);
   const int channels = bottom[0]->shape(1);
 
   // For in-place computation
@@ -154,8 +154,8 @@ void PReLULayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   // keep top_diff unchanged.
   if (this->param_propagate_down_[0]) {
     Dtype* slope_diff = this->blobs_[0]->mutable_cpu_diff();
-    for (long i = 0; i < count; ++i) {
-      long c = (i / dim) % channels / div_factor;
+    for (size_t i = 0; i < count; ++i) {
+      size_t c = (i / dim) % channels / div_factor;
       slope_diff[c] += top_diff[i] * bottom_data[i] * (bottom_data[i] <= 0);
     }
   }
@@ -165,8 +165,8 @@ void PReLULayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     #ifdef _OPENMP
     #pragma omp parallel for
     #endif
-    for (long i = 0; i < count; ++i) {
-      long c = (i / dim) % channels / div_factor;
+    for (size_t i = 0; i < count; ++i) {
+      size_t c = (i / dim) % channels / div_factor;
       bottom_diff[i] = top_diff[i] * ((bottom_data[i] > 0)
           + slope_data[c] * (bottom_data[i] <= 0));
     }

@@ -70,27 +70,28 @@ template <typename Dtype>
 void SmoothL1LossOHEMLayer<Dtype>::Reshape(
   const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::Reshape(bottom, top);
-  CHECK_EQ(bottom[0]->channels(), bottom[1]->channels());
-  CHECK_EQ(bottom[0]->height(), bottom[1]->height());
-  CHECK_EQ(bottom[0]->width(), bottom[1]->width());
-  if (has_weights_) {
-    CHECK_EQ(bottom[0]->channels(), bottom[2]->channels());
-    CHECK_EQ(bottom[0]->height(), bottom[2]->height());
-    CHECK_EQ(bottom[0]->width(), bottom[2]->width());
+
+  for (int i = 1; i < bottom[0]->num_axes(); i++) {
+    CHECK_EQ(bottom[0]->shape(i), bottom[1]->shape(i));
+    if (has_weights_) {
+      CHECK_EQ(bottom[0]->shape(i), bottom[2]->shape(i));
+    }
   }
 
-  outer_num_ = bottom[0]->num();
-  inner_num_ = bottom[0]->height() * bottom[0]->width();
+  outer_num_ = bottom[0]->shape(0);
+  inner_num_ = 1;
+  for (int i = 2; i < bottom[0]->num_axes(); i++) {
+    inner_num_ *= bottom[0]->shape(i);
+  }
 
-  diff_.Reshape(bottom[0]->num(), bottom[0]->channels(),
-      bottom[0]->height(), bottom[0]->width());
-  errors_.Reshape(bottom[0]->num(), bottom[0]->channels(),
-      bottom[0]->height(), bottom[0]->width());
+  diff_.ReshapeLike(*bottom[0]);
+  errors_.ReshapeLike(*bottom[0]);
 
   // top[2] stores per-instance loss, which takes the shape of N*1*H*W
   if (top.size() >= 2) {
-    top[1]->Reshape(
-      bottom[0]->num(), 1, bottom[0]->height(), bottom[0]->width());
+    vector<int> bottom_dims(bottom[0]->shape());
+    bottom_dims[1] = 1;
+    top[1]->Reshape(bottom_dims);
   }
 }
 
@@ -127,8 +128,8 @@ Dtype SmoothL1LossOHEMLayer<Dtype>::get_normalizer(
 template <typename Dtype>
 void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-    int count = bottom[0]->count();
-  
+    size_t count = bottom[0]->count();
+
     caffe_sub(
       count,
       bottom[0]->cpu_data(),
@@ -145,7 +146,7 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (int index = 0; index < count; index++) {
+    for (size_t index = 0; index < count; index++) {
       Dtype val = diff_.cpu_data()[index];
       Dtype abs_val = abs(val);
       if (abs_val < 1) {
@@ -170,8 +171,8 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
         for (int i = 0; i < outer_num_; ++i) {
             for (int j = 0; j < inner_num_; j++) {
                 Dtype sum = 0;
-                for (int c = 0; c < bottom[0]->channels(); ++c) {
-                    sum += errors_.cpu_data()[(i * bottom[0]->channels() + c) * inner_num_ + j];
+                for (int c = 0; c < bottom[0]->shape(1); ++c) {
+                    sum += errors_.cpu_data()[(i * bottom[0]->shape(1) + c) * inner_num_ + j];
                 }
                 top[1]->mutable_cpu_data()[i * inner_num_ + j] = sum;
             }
@@ -179,31 +180,16 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
     }
 }
 
-#if 0
-template <typename Dtype>
-__global__ void kernel_channel_sum(const int num, const int channels,
-  const int spatial_dim, const Dtype* data, Dtype* channel_sum) {
-  CUDA_KERNEL_LOOP(index, num * spatial_dim) {
-	int n = index / spatial_dim;
-	int s = index % spatial_dim;
-	Dtype sum = 0;
-	for (int c = 0; c < channels; ++c) {
-	  sum += data[(n * channels + c) * spatial_dim + s];
-	}
-	channel_sum[index] = sum;
-  }
-}
-#endif
 
 template <typename Dtype>
 void SmoothL1LossOHEMLayer<Dtype>::Backward_cpu(
   const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down,
   const vector<Blob<Dtype>*>& bottom) {
-    int count = diff_.count();
+    size_t count = diff_.count();
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (int index = 0; index < count; index++) {
+    for (size_t index = 0; index < count; index++) {
       Dtype val = diff_.cpu_data()[index];
       Dtype abs_val = abs(val);
       if (abs_val < 1) {

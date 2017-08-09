@@ -43,13 +43,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace caffe {
 
 template <typename Dtype>
-void Permute(const int count, Dtype* bottom_data, const bool forward,
+void Permute(const size_t count, Dtype* bottom_data, const bool forward,
     const int* permute_order, const int* old_steps, const int* new_steps,
     const int num_axes, Dtype* top_data) {
 #pragma omp parallel for
-    for (int i = 0; i < count; ++i) {
-      int old_idx = 0;
-      int idx = i;
+    for (size_t i = 0; i < count; ++i) {
+      size_t old_idx = 0;
+      size_t idx = i;
       for (int j = 0; j < num_axes; ++j) {
         int order = permute_order[j];
         old_idx += (idx / new_steps[j]) * old_steps[order];
@@ -138,7 +138,7 @@ void PermuteLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   if (need_permute_) {
     Dtype* bottom_data = bottom[0]->mutable_cpu_data();
     Dtype* top_data = top[0]->mutable_cpu_data();
-    const int top_count = top[0]->count();
+    const size_t top_count = top[0]->count();
     const int* permute_order = permute_order_.cpu_data();
     const int* old_steps = old_steps_.cpu_data();
     const int* new_steps = new_steps_.cpu_data();
@@ -157,7 +157,7 @@ void PermuteLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   if (need_permute_) {
     Dtype* top_diff = top[0]->mutable_cpu_diff();
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
-    const int top_count = top[0]->count();
+    const size_t top_count = top[0]->count();
     const int* permute_order = permute_order_.cpu_data();
     const int* old_steps = old_steps_.cpu_data();
     const int* new_steps = new_steps_.cpu_data();

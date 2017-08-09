@@ -37,7 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /**
  * @brief A layer factory that allows one to register layers.
- * During runtime, registered layers could be called by passing a LayerParameter
+ * During runtime, registered layers can be called by passing a LayerParameter
  * protobuffer to the CreateLayer function:
  *
  *     LayerRegistry<Dtype>::CreateLayer(param);

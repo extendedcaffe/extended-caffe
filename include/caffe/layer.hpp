@@ -55,8 +55,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define LOG_BLOB(layer, blob, part, blob_id, description)              \
   do                                                                   \
   {                                                                    \
-      long elems_to_log = std::min(static_cast<long>(MAX_ELEMS_TO_LOG), blob->count());    \
-      for (long idx = 0; idx < elems_to_log; idx++)                     \
+      size_t elems_to_log = std::min(static_cast<size_t>(MAX_ELEMS_TO_LOG), blob->count());    \
+      for (size_t idx = 0; idx < elems_to_log; idx++)                     \
       {                                                                \
           LOG_LAYER(layer) << description                              \
                            << ", blob_id " << blob_id                  \
@@ -68,8 +68,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define LOG_PARAM_BLOB(blob, part, blob_id, description)               \
   do                                                                   \
   {                                                                    \
-      long elems_to_log = std::min(static_cast<long>(MAX_ELEMS_TO_LOG), blob->count());    \
-      for (long idx = 0; idx < elems_to_log; idx++)                     \
+      size_t elems_to_log = std::min(static_cast<size_t>(MAX_ELEMS_TO_LOG), blob->count());    \
+      for (size_t idx = 0; idx < elems_to_log; idx++)                     \
       {                                                                \
           DLOG(INFO) << description                                    \
                      << ", blob_id " << blob_id                        \
@@ -85,7 +85,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           /*LOG(WARNING) << "skip NULL buffer";*/                \
           break;                                             \
       }                                                      \
-      for (int idx = 0; idx < MAX_ELEMS_TO_LOG; idx++)       \
+      for (size_t idx = 0; idx < MAX_ELEMS_TO_LOG; idx++)       \
       {                                                      \
           LOG_LAYER(layer) << description                    \
                            << ", buffer_id " << buffer_id    \

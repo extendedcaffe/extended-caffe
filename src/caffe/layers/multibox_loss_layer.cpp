@@ -181,6 +181,38 @@ void MultiBoxLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
+Dtype MultiBoxLossLayer<Dtype>::get_normalizer(
+    LossParameter_NormalizationMode normalization_mode, int valid_count) {
+  Dtype normalizer;
+  switch (normalization_mode) {
+    case LossParameter_NormalizationMode_FULL:
+      normalizer = Dtype(num_ * num_priors_);
+      break;
+    case LossParameter_NormalizationMode_VALID:
+      if (valid_count == -1) {
+        normalizer = Dtype(num_* num_priors_);
+      } else {
+        normalizer = Dtype(valid_count);
+      }
+      break;
+    case LossParameter_NormalizationMode_BATCH_SIZE:
+      normalizer = Dtype(num_);
+      break;
+    case LossParameter_NormalizationMode_NONE:
+      normalizer = Dtype(1);
+      break;
+    default:
+      LOG(FATAL) << "Unknown normalization mode: "
+          << LossParameter_NormalizationMode_Name(normalization_mode);
+  }
+  // Some users will have no labels for some examples in order to 'turn off' a
+  // particular loss in a multi-task setup. The max prevents NaNs in that case.
+  // LOG(ERROR) << this->layer_param_.name() << " normalizer is: " << normalizer;
+  return std::max(Dtype(1.0), normalizer);
+}
+
+
+template <typename Dtype>
 void MultiBoxLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* loc_data = bottom[0]->cpu_data();
@@ -282,15 +314,11 @@ void MultiBoxLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
   top[0]->mutable_cpu_data()[0] = 0;
   if (this->layer_param_.propagate_down(0)) {
-    Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-        normalization_, num_, num_priors_, num_matches_);
     top[0]->mutable_cpu_data()[0] +=
-        loc_weight_ * loc_loss_.cpu_data()[0] / normalizer;
+        loc_weight_ * loc_loss_.cpu_data()[0] / get_normalizer(normalization_, num_matches_);
   }
   if (this->layer_param_.propagate_down(1)) {
-    Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-        normalization_, num_, num_priors_, num_matches_);
-    top[0]->mutable_cpu_data()[0] += conf_loss_.cpu_data()[0] / normalizer;
+    top[0]->mutable_cpu_data()[0] += conf_loss_.cpu_data()[0] / get_normalizer(normalization_, num_matches_);
   }
 }
 
@@ -322,9 +350,7 @@ void MultiBoxLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                                 loc_bottom_vec_);
       PERFORMANCE_MEASUREMENT_END_STATIC("BW_Smooth_L1");}
       // Scale gradient.
-      Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-          normalization_, num_, num_priors_, num_matches_);
-      Dtype loss_weight = top[0]->cpu_diff()[0] / normalizer;
+      Dtype loss_weight = top[0]->cpu_diff()[0] / get_normalizer(normalization_, num_matches_);
       caffe_scal(loc_pred_.count(), loss_weight, loc_pred_.mutable_cpu_diff());
       // Copy gradient back to bottom[0].
       const Dtype* loc_pred_diff = loc_pred_.cpu_diff();
@@ -365,9 +391,7 @@ void MultiBoxLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                                  conf_bottom_vec_);
       PERFORMANCE_MEASUREMENT_END_STATIC("BW_Softmax");}
       // Scale gradient.
-      Dtype normalizer = LossLayer<Dtype>::GetNormalizer(
-          normalization_, num_, num_priors_, num_matches_);
-      Dtype loss_weight = top[0]->cpu_diff()[0] / normalizer;
+      Dtype loss_weight = top[0]->cpu_diff()[0] / get_normalizer(normalization_, num_matches_);
       caffe_scal(conf_pred_.count(), loss_weight,
                  conf_pred_.mutable_cpu_diff());
       // Copy gradient back to bottom[1].

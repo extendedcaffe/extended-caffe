@@ -1259,6 +1259,7 @@ message ImageDataParameter {
 message InfogainLossParameter {
   // Specify the infogain matrix source.
   optional string source = 1;
+  optional int32 axis = 2 [default = 1]; // axis of prob
 }
 
 message InnerProductParameter {
@@ -1472,6 +1473,7 @@ message PoolingParameter {
   // Preceding dimensions are treated as independent inputs;
   // succeeding dimensions are treated as "spatial".
   optional int32 axis = 13 [default = 1];
+  optional bool avg_include_pad = 14 [default = true];
 }
 
 message PowerParameter {
