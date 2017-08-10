@@ -332,6 +332,7 @@ layer {
     top: "deconv3"
     name: "deconv3"
     type: "Deconvolution"
+    engine: "CAFFE"
     convolution_param {
         num_output: 512
         pad: 0
@@ -427,6 +428,7 @@ layer {
     top: "deconv2"
     name: "deconv2"
     type: "Deconvolution"
+    engine: "CAFFE"
     convolution_param {
         num_output: 256
         pad: 0
@@ -522,6 +524,7 @@ layer {
     top: "deconv1"
     name: "deconv1"
     type: "Deconvolution"
+    engine: "CAFFE"
     convolution_param {
         num_output: 128
         pad: 0
@@ -617,6 +620,7 @@ layer {
     top: "deconv0"
     name: "deconv0"
     type: "Deconvolution"
+    engine: "CAFFE"
     convolution_param {
         num_output: 64
         pad: 0
