@@ -15,11 +15,11 @@ namespace caffe {
  *        as input N feature maps and a list of R regions of interest.
  *
  *   ROIPoolingLayer takes 2 inputs and produces 1 output. bottom[0] is
- *   [N x C x H x W] feature maps on which pooling is performed. bottom[1] is
- *   [R x 5] containing a list R ROI tuples with batch index and coordinates of
+ *   [N x C x H x W] in 2D case, [N x C x D x H x W] in 3D case feature maps on which pooling is performed. bottom[1] is
+ *   [R x 5] in 2D case, [R x 7] in 3D case containing a list R ROI tuples with batch index and coordinates of
  *   regions of interest. Each row in bottom[1] is a ROI tuple in format
- *   [batch_index x1 y1 x2 y2], where batch_index corresponds to the index of
- *   instance in the first input and x1 y1 x2 y2 are 0-indexed coordinates
+ *   [batch_index x1 y1 x2 y2] in 2D case, [batch_index z1 x1 y1 z2 x2 y2] in 3D case, where batch_index corresponds to the index of
+ *   instance in the first input and z1 x1 z2 y1 x2 y2 are 0-indexed coordinates
  *   of ROI rectangle (including its boundaries).
  *
  *   For each of the R ROIs, max-pooling is performed over pooled_h x pooled_w
@@ -30,17 +30,19 @@ namespace caffe {
  *    start_ph (included) = y1 + floor(ph * (y2 - y1 + 1) / pooled_h)
  *    end_ph (excluded)   = y1 + ceil((ph + 1) * (y2 - y1 + 1) / pooled_h)
  *
- *   and similar horizontal bins.
+ *   and similar horizontal bins and depth bins.
  *
  * @param param provides ROIPoolingParameter roi_pooling_param,
  *        with ROIPoolingLayer options:
  *  - pooled_h. The pooled output height.
- *  - pooled_w. The pooled output width
+ *  - pooled_w. The pooled output width.
+ *  - pooled_size. The pooled size.
  *  - spatial_scale. Multiplicative spatial scale factor to translate ROI
  *  coordinates from their input scale to the scale used when pooling.
  *
  * Fast R-CNN
  * Written by Ross Girshick
+ * Enhanced by YAO Matrix
  */
 
 template <typename Dtype>
@@ -71,10 +73,13 @@ class ROIPoolingLayer : public Layer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   int channels_;
+  int num_spatial_axes_;
+  int depth_;
   int height_;
   int width_;
-  int pooled_height_;
-  int pooled_width_;
+  int pooled_d_;
+  int pooled_h_;
+  int pooled_w_;
   Dtype spatial_scale_;
   Blob<int> max_idx_;
 };

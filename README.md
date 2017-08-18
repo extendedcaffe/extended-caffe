@@ -8,10 +8,10 @@
  5. $make pycaffe
  6. $export LD_LIBRARY_PATH=<caffe_path>/external/mkldnn/install/lib/:$LD_LIBRARY_PATH
 ```
-
-## Verified OS
- 1. Ubuntu
- 2. CentOS
+## Verified Environment
+ 1. Ubuntu 16.04
+ 2. CentOS 7.2/7.3
+ 3. GCC 4.8.5
 
 ## How to run w/ best performance
  1. turn off hyper threading in your machine

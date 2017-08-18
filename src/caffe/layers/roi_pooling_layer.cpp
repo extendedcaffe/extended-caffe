@@ -85,15 +85,15 @@ void ROIPoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         << "pooled_size must be specified once, or once per spatial dimension"
         << " (pooled_size specified " << num_dims << " times "
         << num_spatial_axes_ << " spatial dims).";
-	  if (num_dims == 1) {
+      if (num_dims == 1) {
         pooled_d_ = pooled_h_ = pooled_w_ = roi_pool_param.pooled_size(0);
-	  } else {
+      } else {
         pooled_d_ = roi_pool_param.pooled_size(0);
         pooled_h_ = roi_pool_param.pooled_size(1);
         pooled_w_ = roi_pool_param.pooled_size(2);
-	  }
+      }
 
-	  CHECK_GT(pooled_d_, 0) << "pooled_d must be > 0";
+      CHECK_GT(pooled_d_, 0) << "pooled_d must be > 0";
       CHECK_GT(pooled_h_, 0) << "pooled_h must be > 0";
       CHECK_GT(pooled_w_, 0) << "pooled_w must be > 0";
     }
