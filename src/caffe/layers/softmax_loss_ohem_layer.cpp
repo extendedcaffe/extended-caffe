@@ -153,12 +153,13 @@ void SoftmaxWithLossOHEMLayer<Dtype>::Forward_cpu(
       DCHECK_LT(label_value, prob_.shape(softmax_axis_));
 
       // loss -= log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
-      //                     Dtype(FLT_MIN)));
-      loss_data[i*inner_num_+j] = -log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
-                           Dtype(FLT_MIN)));
+      //                      Dtype(FLT_MIN)));
+      loss_data[i * inner_num_ + j] = -log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
+                                           Dtype(FLT_MIN)));
       ++count;
     }
   }
+
   loss = caffe_cpu_asum(count, loss_data);
   top[0]->mutable_cpu_data()[0] = loss / get_normalizer(normalization_, count);
   if (top.size() == 2) {
@@ -167,8 +168,7 @@ void SoftmaxWithLossOHEMLayer<Dtype>::Forward_cpu(
 
   if (top.size() >= 3) {
     // Output per-instance loss
-    caffe_copy(top[2]->count(), loss_data,
-      top[2]->mutable_cpu_data());
+    caffe_copy(top[2]->count(), loss_data, top[2]->mutable_cpu_data());
   }
 
   // Fix a bug, which happens when propagate_down[0] = false in backward
@@ -183,6 +183,7 @@ void SoftmaxWithLossOHEMLayer<Dtype>::Backward_cpu(
     LOG(FATAL) << this->type()
                << " Layer cannot backpropagate to label inputs.";
   }
+
   if (propagate_down[0]) {
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     const Dtype* prob_data = prob_.cpu_data();
@@ -203,9 +204,9 @@ void SoftmaxWithLossOHEMLayer<Dtype>::Backward_cpu(
         }
       }
     }
+
     // Scale gradient
-    Dtype loss_weight = top[0]->cpu_diff()[0] /
-                        get_normalizer(normalization_, count);
+    Dtype loss_weight = top[0]->cpu_diff()[0] / get_normalizer(normalization_, count);
     caffe_scal(prob_.count(), loss_weight, bottom_diff);
   }
 }

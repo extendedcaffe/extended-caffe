@@ -77,13 +77,13 @@ int ConvolutionLayer<Dtype>::checkAVX() {
   bool no_1x1x1_kernel = (kernel_size > 1);
 
   bool ok = true && no_dilation && no_stride && no_1x1x1_kernel &&
-            no_group && (ic % 8 == 0 || ic == 3) && (oc % 8 == 0);
+            no_group && (ic % 8 == 0) && (oc % 8 == 0);
 
 
   if (!ok) {
     return 0;
   } else {
-    int type = ((ic % 16 == 0 || ic == 3) && (oc % 16 == 0)) ? 1 : 2;
+    int type = ((ic % 16 == 0) && (oc % 16 == 0)) ? 1 : 2;
     return type;
   }
 }
@@ -257,18 +257,33 @@ void ConvolutionLayer<Dtype>::ReshapeForMKLdnn(const vector<Blob<Dtype>*>& botto
   // get cpu engine
   cpu_engine = new engine(engine::cpu, 0);
 
+  // clear internal memory & primitive
+  conv_src_mem.clear();
+  conv_weights_mem.clear();
+  conv_bias_mem.clear();
+  conv_dst_mem.clear();
+  sum_dst_mem.clear();
+
+  conv_wgts_bwd_mem.clear();
+  conv_wgts_diff_mem.clear();
+  conv_bias_diff_mem.clear();
+  conv_src_diff_mem.clear();
+  conv_dst_diff_mem.clear();
+  sum_dst_bwd_data_mem.clear();
+  sum_dst_bwd_wgts_mem.clear();
+  sum_dst_bwd_bias_mem.clear();
+
+  conv_fwds.clear();
+  sums_fwds.clear();
+
+  conv_bwds_data.clear();
+  sums_bwds_data.clear();
+  conv_bwds_wgts.clear();
+  sums_bwds_wgts.clear();
+  sums_bwds_bias.clear();
+
   // data resize
   srcsync = false;
-  conv_srcs.clear();
-  conv_dsts.clear();
-  conv_weight.clear();
-  conv_bias.clear();
-
-  conv_weight_bwd.clear();
-  conv_weight_diff.clear();
-  conv_bias_diff.clear();
-  conv_srcs_diff.clear();
-  conv_dsts_diff.clear();
 
   conv_srcs.resize(bottom.size() * bottom[0]->count());
   conv_dsts.resize(top.size() * top[0]->count());

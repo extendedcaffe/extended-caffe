@@ -144,7 +144,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
             << "Padding implemented only for average and max pooling.";
         CHECK_LT(pad_h_, kernel_h_);
         CHECK_LT(pad_w_, kernel_w_);
-  }
+      }
     } else if (num_spatial_axes_ == 3) {
       // Process 3D Pooling
       // Setup input dimensions (input_shape_).

@@ -87,7 +87,7 @@ void SmoothL1LossOHEMLayer<Dtype>::Reshape(
   diff_.ReshapeLike(*bottom[0]);
   errors_.ReshapeLike(*bottom[0]);
 
-  // top[2] stores per-instance loss, which takes the shape of N*1*H*W
+  // top[2] stores per-instance loss, which takes the shape of N*1*spatial_dims
   if (top.size() >= 2) {
     vector<int> bottom_dims(bottom[0]->shape());
     bottom_dims[1] = 1;
@@ -158,10 +158,8 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
 
     Dtype loss = caffe_cpu_asum(count, errors_.cpu_data());
 
-    Dtype pre_fixed_normalizer =
-      this->layer_param_.loss_param().pre_fixed_normalizer();
-    top[0]->mutable_cpu_data()[0] = loss / get_normalizer(normalization_,
-      pre_fixed_normalizer);
+    Dtype pre_fixed_normalizer = this->layer_param_.loss_param().pre_fixed_normalizer();
+    top[0]->mutable_cpu_data()[0] = loss / get_normalizer(normalization_, pre_fixed_normalizer);
 
     // Output per-instance loss
     if (top.size() >= 2) {
@@ -179,7 +177,6 @@ void SmoothL1LossOHEMLayer<Dtype>::Forward_cpu(
         }
     }
 }
-
 
 template <typename Dtype>
 void SmoothL1LossOHEMLayer<Dtype>::Backward_cpu(
@@ -206,8 +203,7 @@ void SmoothL1LossOHEMLayer<Dtype>::Backward_cpu(
       if (propagate_down[i]) {
         const Dtype sign = (i == 0) ? 1 : -1;
 
-        Dtype pre_fixed_normalizer =
-          this->layer_param_.loss_param().pre_fixed_normalizer();
+        Dtype pre_fixed_normalizer = this->layer_param_.loss_param().pre_fixed_normalizer();
         Dtype normalizer = get_normalizer(normalization_, pre_fixed_normalizer);
         Dtype alpha = sign * top[0]->cpu_diff()[0] / normalizer;
 

@@ -65,7 +65,7 @@ namespace caffe {
     PSROIPoolingParameter psroi_pooling_param =
       this->layer_param_.psroi_pooling_param();
     spatial_scale_ = psroi_pooling_param.spatial_scale();
-    LOG(ERROR) << "Spatial scale: " << spatial_scale_;
+    LOG(INFO) << "Spatial scale: " << spatial_scale_;
 
     CHECK_GT(psroi_pooling_param.output_dim(), 0)
       << "output_dim must be > 0";
@@ -93,7 +93,6 @@ namespace caffe {
       bottom[1]->num(), output_dim_, pooled_height_, pooled_width_);
   }
 
-
   template <typename Dtype>
   static void PSROIPoolingForward(
     const int num,
@@ -110,11 +109,10 @@ namespace caffe {
       // LOG(INFO) << "psroi pooling cpu_forward";
       int pixels = width * height;
 #ifdef _OPENMP
-	#pragma omp parallel for
+      #pragma omp parallel for
 #endif
-     for (int n = 0; n < num; ++n) {
+      for (int n = 0; n < num; ++n) {
         // per roi
-
         int roi_add = n * 5;
         // [start, end) interval for spatial sampling
         int roi_batch_ind = bottom_rois[roi_add];
@@ -214,7 +212,7 @@ namespace caffe {
 	// LOG(INFO) << "psroipooling backward cpu";
     int pixels = height * width;
 #ifdef _OPENMP
- 	#pragma omp parallel for
+    #pragma omp parallel for
 #endif
     for (int i = 0; i < num; ++i) {
       // The output is in order (n, ctop, ph, pw)
@@ -269,7 +267,6 @@ namespace caffe {
   template <typename Dtype>
   void PSROIPoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-
     if (!propagate_down[0]) {
       return;
     }

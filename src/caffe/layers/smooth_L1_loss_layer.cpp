@@ -85,8 +85,7 @@ void SmoothL1LossLayer<Dtype>::Reshape(
 }
 
 template <typename Dtype>
-void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) 
-{
+void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
     size_t count = bottom[0]->count();
     caffe_sub(count, bottom[0]->cpu_data(), bottom[1]->cpu_data(), diff_.mutable_cpu_data());    // d := b0 - b1
     if (has_weights_) {
@@ -94,6 +93,9 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
         caffe_mul(count, bottom[2]->cpu_data(), diff_.cpu_data(), diff_.mutable_cpu_data());  // d := w_in * (b0 - b1)
     }
 
+#ifdef _OPENMP
+    #pragma omp parallel for
+#endif
     for (size_t i = 0; i < count; i++) {
         Dtype val = diff_.cpu_data()[i];
         Dtype abs_val = fabs(val);
@@ -112,13 +114,14 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
     top[0]->mutable_cpu_data()[0] = loss / bottom[0]->shape(0);
 }
 
-
 template <typename Dtype>
-void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) 
-{
+void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     // after forwards, diff_ holds w_in * (b0 - b1)
     size_t count = diff_.count();
-    
+
+#ifdef _OPENMP
+    #pragma omp parallel for
+#endif
     for (size_t i = 0; i < count; i++) {
         // f'(x) = sigma * sigma * x         if |x| < 1 / sigma / sigma
         //       = sign(x)                   otherwise
@@ -132,6 +135,9 @@ void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, con
         }
     }
 
+#ifdef _OPENMP
+    #pragma omp parallel for
+#endif
     for (int i = 0; i < 2; ++i) {
         if (propagate_down[i])  {
             const Dtype sign = (i == 0) ? 1 : -1;
