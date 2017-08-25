@@ -611,7 +611,7 @@ int time() {
 }
 RegisterBrewFunction(time);
 
-// collect & compare: Debugging extansion for CPU-GPU functional comparison
+// collect & compare: Debugging extension for CPU-GPU functional comparison
 #include <stdio.h>
 #include "caffe/util/compareToolUtilities.h"
 

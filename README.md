@@ -10,7 +10,7 @@
 ```
 ## Verified Environment
  1. Ubuntu 16.04
- 2. CentOS 7.2/7.3
+ 2. CentOS 7.2 & 7.3
  3. GCC 4.8.5
 
 ## How to run w/ best performance

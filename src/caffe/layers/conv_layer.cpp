@@ -182,7 +182,7 @@ void ConvolutionLayer<Dtype>::Reorder(Dtype* output, Blob<Dtype>* data_blob,
                       if (!reverse) {
                         output[off_o] = input[off_i];
                       } else {
-                        input[off_i] = output[off_o];
+                        input[off_i] = isdiff ? input[off_i] + output[off_o] : output[off_o];
                       }
 		    }
                   }
@@ -199,7 +199,7 @@ void ConvolutionLayer<Dtype>::Reorder(Dtype* output, Blob<Dtype>* data_blob,
         if (!reverse) {
           output[oc] = input[oc] / (Dtype)num_slices;
         } else {
-          input[oc] = output[oc];
+          input[oc] = isdiff ? input[oc] + output[oc] : output[oc];
         }
       }
       break;

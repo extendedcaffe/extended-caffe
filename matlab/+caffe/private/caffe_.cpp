@@ -698,10 +698,6 @@ static handler_registry handlers[] = {
  **/
 // Usage: caffe_(api_command, arg1, arg2, ...)
 void mexFunction(MEX_ARGS) {
-#ifdef _MSC_VER
-  if (init_key == -1)
-    init_key = static_cast<double>(caffe_rng_rand());
-#endif  // _MSC_VER
   mexLock();  // Avoid clearing the mex file.
   mxCHECK(nrhs > 0, "Usage: caffe_(api_command, arg1, arg2, ...)");
   // Handle input command

@@ -67,12 +67,16 @@ void SoftmaxLayer<Dtype>::Forward_cpu_fast_case(
   int channels = bottom[0]->shape(softmax_axis_);
   int dim = bottom[0]->count() / outer_num_;
   // assert(dim == channels);
+
+  Dtype *top_base = top[0]->mutable_cpu_data();
+  const Dtype *bottom_base = bottom[0]->cpu_data();
+
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
   for (int i = 0; i < outer_num_; ++i) {
-    const Dtype* bottom_data = bottom[0]->cpu_data() + i*dim;
-    Dtype *top_data = top[0]->mutable_cpu_data() + channels*i;
+    const Dtype* bottom_data = bottom_base + i * dim;
+    Dtype *top_data = top_base + i * channels;
 
     Dtype scale_data = bottom_data[0];
     for (int j = 1; j < channels; ++j) {
@@ -118,7 +122,7 @@ void SoftmaxLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // and then normalize.
   for (int i = 0; i < outer_num_; ++i) {
 #ifdef _OPENMP
-#pragma omp parallel for
+    #pragma omp parallel for
 #endif
     for (int k = 0; k < inner_num_; k++) {
       Dtype max_val = bottom_data[i * dim + k];
@@ -182,7 +186,7 @@ void SoftmaxLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     }
     // subtraction
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels, inner_num_, 1,
-        -1., sum_multiplier_.cpu_data(), scale_data, 1., bottom_diff + i * dim);
+                          -1., sum_multiplier_.cpu_data(), scale_data, 1., bottom_diff + i * dim);
   }
   // elementwise multiplication
   caffe_mul(top[0]->count(), bottom_diff, top_data, bottom_diff);

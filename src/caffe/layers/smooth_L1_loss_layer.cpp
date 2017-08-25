@@ -93,6 +93,8 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
         caffe_mul(count, bottom[2]->cpu_data(), diff_.cpu_data(), diff_.mutable_cpu_data());  // d := w_in * (b0 - b1)
     }
 
+    Dtype* errors = errors_.mutable_cpu_data();
+
 #ifdef _OPENMP
     #pragma omp parallel for
 #endif
@@ -100,12 +102,13 @@ void SmoothL1LossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, c
         Dtype val = diff_.cpu_data()[i];
         Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
-           errors_.mutable_cpu_data()[i] = 0.5 * val * val * sigma2_;
+           errors[i] = 0.5 * val * val * sigma2_;
         } 
         else {
-           errors_.mutable_cpu_data()[i] = abs_val - 0.5 / sigma2_;
+           errors[i] = abs_val - 0.5 / sigma2_;
         }
     }
+
     if (has_weights_) {
         // apply "outside" weights
         caffe_mul(count, bottom[3]->cpu_data(), errors_.cpu_data(), errors_.mutable_cpu_data());  // d := w_out * SmoothL1(w_in * (b0 - b1))
@@ -119,6 +122,8 @@ void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, con
     // after forwards, diff_ holds w_in * (b0 - b1)
     size_t count = diff_.count();
 
+    Dtype* diff = diff_.mutable_cpu_data();
+
 #ifdef _OPENMP
     #pragma omp parallel for
 #endif
@@ -128,10 +133,10 @@ void SmoothL1LossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top, con
         Dtype val = diff_.cpu_data()[i];
         Dtype abs_val = fabs(val);
         if (abs_val < 1.0 / sigma2_) {
-          diff_.mutable_cpu_data()[i] = sigma2_ * val;
+          diff[i] = sigma2_ * val;
         } 
         else {
-          diff_.mutable_cpu_data()[i] = (Dtype(0) < val) - (val < Dtype(0));
+          diff[i] = (Dtype(0) < val) - (val < Dtype(0));
         }
     }
 

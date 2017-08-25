@@ -326,7 +326,7 @@ Dtype Blob<Dtype>::asum_data() const {
   switch (data_->head()) {
   case SyncedMemory::SYNCED_PRV:
   case SyncedMemory::HEAD_AT_PRV:
-    return caffe_cpu_asum( prv_data_count(), prv_data());
+    return caffe_cpu_asum(prv_data_count(), prv_data());
   case SyncedMemory::HEAD_AT_CPU:
     return caffe_cpu_asum(count_, cpu_data());
   case SyncedMemory::HEAD_AT_GPU:

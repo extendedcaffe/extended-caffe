@@ -2958,6 +2958,7 @@ TYPED_TEST(NetTest, TestAllInOneNetDeploy) {
   ASSERT_TRUE(found_data);
 }
 
+
 class CompileNetTest : public ::testing::Test {
  protected:
   void RunCompilerNetTest(
