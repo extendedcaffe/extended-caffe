@@ -1,12 +1,14 @@
+**ALL, I'd like to put this project to end of life from October 10th 2017. For this specific project is for 2017 Tianchi Lung Nodule Detection Contest, with the contest finalized, this project is becoming deprecated. Thanks all who have been going along with us from July 2017 to September 2017, it's a nice and rememberable journey. Let's keep moving forward and get prepared meet in another journey!!! Sweet Dream!!!**
+
 # Add-on Notes
 ## How to build
 ```shell
  1. fill your project path to BLAS_INCLUDE, BLAS_LIB in Makefile.config to best leverage MKL
- 2. $make clean
- 3. $unset MKLROOT
- 4. $make -j \`nproc\`
- 5. $make pycaffe
- 6. $export LD_LIBRARY_PATH=<caffe_path>/external/mkldnn/install/lib/:$LD_LIBRARY_PATH
+ 2. $ make clean
+ 3. $ unset MKLROOT
+ 4. $ make -j \`nproc\`
+ 5. $ make pycaffe
+ 6. $ export LD_LIBRARY_PATH=<caffe_path>/external/mkldnn/install/lib/:$LD_LIBRARY_PATH
 ```
 ## Verified Environment
  1. Ubuntu 16.04
